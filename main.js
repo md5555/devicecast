@@ -25,9 +25,10 @@ var LocalSoundStreamer = require('./lib/sound/LocalSoundStreamerExec');
 
 /* Various Device controllers */
 var JongoSpeaker = require('./lib/device/controls/JongoSpeaker');
+var RaumfeldZone = require('./lib/device/controls/RaumfeldZone');
 var ChromeCast = require('./lib/device/controls/ChromeCast');
-
 var logger = require('./lib/common/logger');
+var currentDevice = null;
 
 //Menubar construction
 mb.on('ready', function ready() {
@@ -48,6 +49,29 @@ mb.on('ready', function ready() {
             logger.debug('TODO - Refresh Items');
         }
     }));
+
+    deviceListMenu.append(MenuFactory.separator());
+
+    deviceListMenu.append(new MenuItem({
+        label: 'Volume Up',
+        click: function () {
+
+		if (!currentDevice) return;
+
+		currentDevice.volumeUp();
+        }
+    }));
+
+    deviceListMenu.append(new MenuItem({
+        label: 'Volume Down',
+        click: function () {
+
+		if (!currentDevice) return;
+	
+		currentDevice.volumeDown();
+        }
+    }));
+ 
     deviceListMenu.append(MenuFactory.separator());
 
     var devicesAdded = [];
@@ -104,6 +128,7 @@ mb.on('ready', function ready() {
                     }));
                 }
                 else if (DeviceMatcher.isJongo(device)) {
+		
                     devicesAdded.push(device);
 
                     deviceListMenu.append(MenuFactory.jongoDeviceItem(device, function onClicked() {
@@ -119,6 +144,25 @@ mb.on('ready', function ready() {
                             device.controls = new JongoSpeaker(device);
                         }
                         device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
+                    }));
+                }
+                else if (DeviceMatcher.isRaumfeld(device)) {
+		
+                    devicesAdded.push(device);
+
+                    deviceListMenu.append(MenuFactory.jongoDeviceItem(device, function onClicked() {
+                        logger.info('Attempting to play to Raumfeld device', device.name);
+
+                        // Sets OSX selected input and output audio devices to Soundflower
+                        LocalSourceSwitcher.switchSource({
+                            output: 'Soundflower (2ch)',
+                            input: 'Soundflower (2ch)'
+                        });
+
+                        device.controls = new RaumfeldZone(device);
+                        device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
+
+			currentDevice = device.controls;
                     }));
                 }
                 break;
