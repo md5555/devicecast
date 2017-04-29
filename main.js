@@ -4,6 +4,7 @@
 require('shelljs/global');
 var path = require('path');
 var _ = require('lodash');
+var iohook = require('iohook');
 
 //Electron dependencies
 var menubar = require('menubar');
@@ -30,17 +31,18 @@ var ChromeCast = require('./lib/device/controls/ChromeCast');
 var logger = require('./lib/common/logger');
 var currentDevice = null;
 var menu = null;
+var deviceListMenu = null;
 var devicesAdded = [];
 var streamingAddress;
 var onStreamingUpdateUI = function () {
         //Disables all devices until further stop
-        //deviceListMenu.items.forEach(disableAllItems);
+        deviceListMenu.items.forEach(disableAllItems);
 
         // set speak icon when playing
-        //deviceListMenu.items.forEach(setSpeakIcon.bind({device: this.device}));
+        deviceListMenu.items.forEach(setSpeakIcon.bind({device: this.device}));
 
         // Enable 'Stop Casting' item
-        //menu.items[1].enabled = true;
+        menu.items[7].enabled = true;
 
         // Changes tray icon to "Casting"
         mb.tray.setImage(path.join(__dirname, 'castingTemplate.png'));
@@ -50,6 +52,12 @@ var scanForDevices = function() {
 
     DeviceLookupService.lookUpDevices(function onDevice(device) {
 
+	for (var n = 0; n < devicesAdded.length; n++) {
+		if(device.name.localeCompare(devicesAdded[n].name) == 0) {
+			return;
+		}
+	}
+
         switch (device.type) {
             case DeviceMatcher.TYPES.CHROMECAST:
 
@@ -57,7 +65,7 @@ var scanForDevices = function() {
 
 		    devicesAdded.push(device);
 
-                    menu.append(MenuFactory.chromeCastItem(device, function onClicked() {
+                    deviceListMenu.append(MenuFactory.chromeCastItem(device, function onClicked() {
                         logger.info('Attempting to play to Chromecast', device.name);
 
                         // Sets OSX selected input and output audio devices to Soundflower
@@ -79,7 +87,7 @@ var scanForDevices = function() {
 
 		    devicesAdded.push(device);
 
-                    menu.append(MenuFactory.sonosDeviceItem(device, function onClicked() {
+                    deviceListMenu.append(MenuFactory.sonosDeviceItem(device, function onClicked() {
                         logger.debug('TODO Sonos');
                         // TODO on click integrate with sonos
                     }));
@@ -88,7 +96,7 @@ var scanForDevices = function() {
 		
 		    devicesAdded.push(device);
 
-                    menu.append(MenuFactory.jongoDeviceItem(device, function onClicked() {
+                    deviceListMenu.append(MenuFactory.jongoDeviceItem(device, function onClicked() {
 
                         logger.info('Attempting to play to Jongo device', device.name);
 
@@ -108,7 +116,7 @@ var scanForDevices = function() {
 		
 		    devicesAdded.push(device);
 
-                    menu.append(MenuFactory.raumfeldDeviceItem(device, function onClicked() {
+                    deviceListMenu.append(MenuFactory.raumfeldDeviceItem(device, function onClicked() {
 
                         logger.info('Attempting to play to Raumfeld device', device.name);
 
@@ -139,10 +147,16 @@ var scanForDevices = function() {
 //Menubar construction
 mb.on('ready', function ready() {
 
+ioHook.on("keydown", event => {
+  console.log(event);
+});
+
+ioHook.start(true);
+
     //Menu startup message
-
     menu = new Menu();
-
+    deviceListMenu = new Menu();
+ 
    //Refresh
     menu.append(new MenuItem({
         label: 'Refresh Devices...',
@@ -150,6 +164,8 @@ mb.on('ready', function ready() {
 	   scanForDevices();
         }
     }));
+
+    menu.append(MenuFactory.castToDeviceMenu(deviceListMenu));
 
     menu.append(MenuFactory.separator());
 
@@ -236,13 +252,12 @@ mb.on('ready', function ready() {
             // FIXME: menu.items.forEach(MenuFactory.removeSpeaker);
 
             // Re-Enable all devices until further notice
-	    /* FIXME: 
             for (var j = 0; j < menu.items.length; j++) {
                 deviceListMenu.items[j].enabled = true;
-            }*/
+            }
 
             // Disable 'Stop Casting' item
-            //menu.items[1].enabled = false;
+            menu.items[7].enabled = false;
 
             // Switch tray icon
             mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
