@@ -29,80 +29,35 @@ var RaumfeldZone = require('./lib/device/controls/RaumfeldZone');
 var ChromeCast = require('./lib/device/controls/ChromeCast');
 var logger = require('./lib/common/logger');
 var currentDevice = null;
+var menu = null;
+var devicesAdded = [];
+var streamingAddress;
+var onStreamingUpdateUI = function () {
+        //Disables all devices until further stop
+        //deviceListMenu.items.forEach(disableAllItems);
 
-//Menubar construction
-mb.on('ready', function ready() {
-    //Menu startup message
-    var menu = new Menu();
-    var deviceListMenu = new Menu();
+        // set speak icon when playing
+        //deviceListMenu.items.forEach(setSpeakIcon.bind({device: this.device}));
 
-    // Initial scanning for devices menu added
-    menu.append(MenuFactory.scanningForDevices());
+        // Enable 'Stop Casting' item
+        //menu.items[1].enabled = true;
 
-    // Clicking this option starts casting audio to Cast
-    menu.append(MenuFactory.castToDeviceMenu(deviceListMenu));
+        // Changes tray icon to "Casting"
+        mb.tray.setImage(path.join(__dirname, 'castingTemplate.png'));
+    };
 
-    //Refresh
-    deviceListMenu.append(new MenuItem({
-        label: 'Refresh Devices...',
-        click: function () {
-            logger.debug('TODO - Refresh Items');
-        }
-    }));
-
-    deviceListMenu.append(MenuFactory.separator());
-
-    deviceListMenu.append(new MenuItem({
-        label: 'Volume Up',
-        click: function () {
-
-		if (!currentDevice) return;
-
-		currentDevice.volumeUp();
-        }
-    }));
-
-    deviceListMenu.append(new MenuItem({
-        label: 'Volume Down',
-        click: function () {
-
-		if (!currentDevice) return;
-	
-		currentDevice.volumeDown();
-        }
-    }));
- 
-    deviceListMenu.append(MenuFactory.separator());
-
-    var devicesAdded = [];
-
-    var streamingAddress;
-
-    LocalSoundStreamer.startStream(function (err, streamUrl) {
-        if (err) {
-            logger.info('Streaming process died', err);
-            dialog.showMessageBox({
-                title: 'Error',
-                message: 'Streaming has crashed, you may need to restart the application!',
-                detail: err.toString(),
-                buttons: ["OK"]
-            });
-        } else {
-            streamingAddress = streamUrl;
-        }
-    });
+var scanForDevices = function() {
 
     DeviceLookupService.lookUpDevices(function onDevice(device) {
-
-        // Disable the 'Scanning for Devices...'
-        menu.items[0].enabled = false;
 
         switch (device.type) {
             case DeviceMatcher.TYPES.CHROMECAST:
 
                 if (DeviceMatcher.isChromecast(device) || DeviceMatcher.isChromecastAudio(device)) {
-                    devicesAdded.push(device);
-                    deviceListMenu.append(MenuFactory.chromeCastItem(device, function onClicked() {
+
+		    devicesAdded.push(device);
+
+                    menu.append(MenuFactory.chromeCastItem(device, function onClicked() {
                         logger.info('Attempting to play to Chromecast', device.name);
 
                         // Sets OSX selected input and output audio devices to Soundflower
@@ -121,17 +76,20 @@ mb.on('ready', function ready() {
             case DeviceMatcher.TYPES.UPNP:
 
                 if (DeviceMatcher.isSonos(device)) {
-                    devicesAdded.push(device);
-                    deviceListMenu.append(MenuFactory.sonosDeviceItem(device, function onClicked() {
+
+		    devicesAdded.push(device);
+
+                    menu.append(MenuFactory.sonosDeviceItem(device, function onClicked() {
                         logger.debug('TODO Sonos');
                         // TODO on click integrate with sonos
                     }));
                 }
                 else if (DeviceMatcher.isJongo(device)) {
 		
-                    devicesAdded.push(device);
+		    devicesAdded.push(device);
 
-                    deviceListMenu.append(MenuFactory.jongoDeviceItem(device, function onClicked() {
+                    menu.append(MenuFactory.jongoDeviceItem(device, function onClicked() {
+
                         logger.info('Attempting to play to Jongo device', device.name);
 
                         // Sets OSX selected input and output audio devices to Soundflower
@@ -148,9 +106,10 @@ mb.on('ready', function ready() {
                 }
                 else if (DeviceMatcher.isRaumfeld(device)) {
 		
-                    devicesAdded.push(device);
+		    devicesAdded.push(device);
 
-                    deviceListMenu.append(MenuFactory.jongoDeviceItem(device, function onClicked() {
+                    menu.append(MenuFactory.raumfeldDeviceItem(device, function onClicked() {
+
                         logger.info('Attempting to play to Raumfeld device', device.name);
 
                         // Sets OSX selected input and output audio devices to Soundflower
@@ -160,18 +119,72 @@ mb.on('ready', function ready() {
                         });
 
                         device.controls = new RaumfeldZone(device);
-                        device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
-
 			currentDevice = device.controls;
+
+                        device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
                     }));
+
+		    logger.info('Added Raumfeld menu item');
                 }
                 break;
             default:
                 logger.error('Unknown recognised device found', logger.level === 'verbose' ? device : device.name);
         }
 
-        // Reset the menu items
         mb.tray.setContextMenu(menu);
+   });
+
+};
+
+//Menubar construction
+mb.on('ready', function ready() {
+
+    //Menu startup message
+
+    menu = new Menu();
+
+   //Refresh
+    menu.append(new MenuItem({
+        label: 'Refresh Devices...',
+        click: function () {
+	   scanForDevices();
+        }
+    }));
+
+    menu.append(MenuFactory.separator());
+
+    menu.append(new MenuItem({
+        label: 'Volume Up',
+        click: function () {
+
+		if (!currentDevice) return;
+
+		currentDevice.volumeUp();
+        }
+    }));
+
+    menu.append(new MenuItem({
+        label: 'Volume Down',
+        click: function () {
+
+		if (!currentDevice) return;
+	
+		currentDevice.volumeDown();
+        }
+    }));
+ 
+    LocalSoundStreamer.startStream(function (err, streamUrl) {
+        if (err) {
+            logger.info('Streaming process died', err);
+            dialog.showMessageBox({
+                title: 'Error',
+                message: 'Streaming has crashed, you may need to restart the application!',
+                detail: err.toString(),
+                buttons: ["OK"]
+            });
+        } else {
+            streamingAddress = streamUrl;
+        }
     });
 
     // Stream Options
@@ -220,15 +233,16 @@ mb.on('ready', function ready() {
             attemptToStopAllDevices();
 
             // Clean up playing speaker icon
-            deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
+            // FIXME: menu.items.forEach(MenuFactory.removeSpeaker);
 
             // Re-Enable all devices until further notice
-            for (var j = 0; j < deviceListMenu.items.length; j++) {
+	    /* FIXME: 
+            for (var j = 0; j < menu.items.length; j++) {
                 deviceListMenu.items[j].enabled = true;
-            }
+            }*/
 
             // Disable 'Stop Casting' item
-            menu.items[2].enabled = false;
+            //menu.items[1].enabled = false;
 
             // Switch tray icon
             mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
@@ -267,30 +281,20 @@ mb.on('ready', function ready() {
         mb.app.quit();
     };
 
-    var onStreamingUpdateUI = function () {
-        //Disables all devices until further stop
-        deviceListMenu.items.forEach(disableAllItems);
-
-        // set speak icon when playing
-        deviceListMenu.items.forEach(setSpeakIcon.bind({device: this.device}));
-
-        // Enable 'Stop Casting' item
-        menu.items[2].enabled = true;
-
-        // Changes tray icon to "Casting"
-        mb.tray.setImage(path.join(__dirname, 'castingTemplate.png'));
-    };
-
     // About
     menu.append(MenuFactory.about());
 
     // Quit
     menu.append(MenuFactory.quit(onQuitHandler));
 
+    // Clicking this option starts casting audio to Cast
+    menu.append(MenuFactory.separator());
+ 
     // CMD + C death
     mb.app.on('quit', onQuitHandler);
 
     // Set the menu items
     mb.tray.setContextMenu(menu);
 
+    scanForDevices();
 });
