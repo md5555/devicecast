@@ -164,6 +164,10 @@ var scanForDevices = function() {
 //Menubar construction
 mb.on('ready', function ready() {
 
+    process.on('uncaughtException', function(err) {
+	dialog.showErrorBox("devicecast - An Error Occurred", err.toString());
+    });
+
     //Menu startup message
     menu = new Menu();
     deviceListMenu = new Menu();
