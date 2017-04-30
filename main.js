@@ -7,6 +7,7 @@ var _ = require('lodash');
 
 //Electron dependencies
 const {app, dialog, Menu, MenuItem} = require('electron')
+const storage = require('electron-json-storage');
 
 var menubar = require('menubar');
 var mb = menubar({dir: __dirname, icon: 'not-castingTemplate.png'});
@@ -32,6 +33,8 @@ var menu = null;
 var deviceListMenu = null;
 var devicesAdded = [];
 var streamingAddress;
+var reconnect = false;
+var reconnectName = null;
 
 var onStop = function() {
 
@@ -53,6 +56,9 @@ var onStop = function() {
 };
 
 var setSpeakIcon = function (item) {
+
+	logger.info("label: %s  name: %s", item.label, this.device.name);
+
         if (item.label === this.device.name) {
             MenuFactory.setSpeaker(item);
         } else {
@@ -63,6 +69,7 @@ var setSpeakIcon = function (item) {
 var onStreamingUpdateUI = function () {
         // set speak icon when playing
         deviceListMenu.items.forEach(setSpeakIcon.bind({device: this.device}));
+    	mb.tray.setContextMenu(menu);
 
         // Changes tray icon to "Casting"
         mb.tray.setImage(path.join(__dirname, 'castingTemplate.png'));
@@ -137,8 +144,8 @@ var scanForDevices = function(self) {
                     }));
                 }
                 else if (DeviceMatcher.isRaumfeld(device)) {
-		
-                    deviceListMenu.append(MenuFactory.raumfeldDeviceItem(device, function onClicked() {
+
+		    var onClicked = function onClicked() {
 
                         logger.info('Attempting to play to Raumfeld device', device.name);
 
@@ -150,11 +157,17 @@ var scanForDevices = function(self) {
 
                         device.controls = new RaumfeldZone(device);
 
-			device.controls.on('stopped', function(payload){
-				onStop();
-			});
-
 			currentDevice = device.controls;
+
+			storage.set('reconnect', { 
+					setting: reconnect,
+					name: device.name
+				}, function(error){
+					if (error == null) {
+						return;
+					}
+					logger.info("error while storing setting: %s", error.toString());
+				});
 
 			device.controls.registerErrorHandler(function(err){
 				dialog.showErrorBox("devicecast - An Error Occurred",
@@ -162,9 +175,15 @@ var scanForDevices = function(self) {
 			});
 
                         device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
-                    }));
+                    };
+		
+                    deviceListMenu.append(MenuFactory.raumfeldDeviceItem(device, onClicked));
 
-		    logger.info('Added Raumfeld menu item');
+		    logger.info('Added Raumfeld menu item (reconnect name: %s)', reconnectName);
+
+		    if (reconnectName != null && (reconnectName.localeCompare(device.name) == 0)) {
+			onClicked();
+		    }
                 }
                 break;
             default:
@@ -178,6 +197,19 @@ var scanForDevices = function(self) {
 
 //Menubar construction
 mb.on('ready', function ready() {
+  
+    storage.get('reconnect',
+		function(error, object){
+
+			if (object == null) {
+		    		return;
+			}
+
+			reconnect = object.setting;
+			reconnectName = object.name;
+
+			logger.info("reconnect: "+reconnect+" name: "+reconnectName);
+	    	});
 
     process.on('uncaughtException', function(err) {
 	dialog.showErrorBox("devicecast - An Error Occurred", err.toString());
@@ -188,6 +220,26 @@ mb.on('ready', function ready() {
     deviceListMenu = new Menu();
  
     menu.append(MenuFactory.castToDeviceMenu(deviceListMenu));
+
+    /*
+    menu.append(new MenuItem({
+        label: 'Reconnect on Start',
+	type: 'checkbox',
+        click: function (item, window, event) {
+	    reconnect = item.checked;
+	    reconnectName = self.currentDevice.name;
+	    storage.set('reconnect', { 
+		setting: reconnect,
+		name: self.currentDevice.name
+		 }, function(error){
+			if (error == null) {
+				return;
+			}
+			logger.info("error while storing setting: %s", error.toString());
+		});
+        }
+    }));
+    */
 
     menu.append(MenuFactory.separator());
 
