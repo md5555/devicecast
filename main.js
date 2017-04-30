@@ -41,18 +41,9 @@ var setSpeakIcon = function (item) {
         }
 };
 
-var disableAllItems = function (item) {
-        item.enabled = false
-};
- 
 var onStreamingUpdateUI = function () {
-        //Disables all devices until further stop
-        deviceListMenu.items.forEach(disableAllItems);
-
         // set speak icon when playing
         deviceListMenu.items.forEach(setSpeakIcon.bind({device: this.device}));
-
-        // Enable 'Stop Casting' item
 
         // Changes tray icon to "Casting"
         mb.tray.setImage(path.join(__dirname, 'castingTemplate.png'));
@@ -139,6 +130,22 @@ var scanForDevices = function() {
                         });
 
                         device.controls = new RaumfeldZone(device);
+
+			var self = this;
+
+			device.controls.on('stopped', function(payload){
+
+		    	    NotificationService.notifyCastingStopped(self.device);
+
+			    // Clean up playing speaker icon
+			    self.menu.items.forEach(MenuFactory.removeSpeaker);
+
+			    // Switch tray icon
+			    self.mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
+
+			    LocalSourceSwitcher.resetOriginSource();
+			});
+
 			currentDevice = device.controls;
 
 			device.controls.registerErrorHandler(function(err){
@@ -264,14 +271,7 @@ mb.on('ready', function ready() {
             attemptToStopAllDevices();
 
             // Clean up playing speaker icon
-            // FIXME: menu.items.forEach(MenuFactory.removeSpeaker);
-
-            // Re-Enable all devices until further notice
-            for (var j = 0; j < deviceListMenu.items.length; j++) {
-                deviceListMenu.items[j].enabled = true;
-            }
-
-            // Disable 'Stop Casting' item
+            menu.items.forEach(MenuFactory.removeSpeaker);
 
             // Switch tray icon
             mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
