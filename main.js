@@ -24,10 +24,10 @@ var UpnpMediaClientUtils = require('./lib/device/utils/UpnpMediaClientUtils');
 var LocalSoundStreamer = require('./lib/sound/LocalSoundStreamerWebcast');
 
 /* Various Device controllers */
-var JongoSpeaker = require('./lib/device/controls/JongoSpeaker');
 var RaumfeldZone = require('./lib/device/controls/RaumfeldZone');
 var ChromeCast = require('./lib/device/controls/ChromeCast');
 var logger = require('./lib/common/logger');
+
 var currentDevice = null;
 var menu = null;
 var deviceListMenu = null;
@@ -35,24 +35,46 @@ var devicesAdded = [];
 var streamingAddress;
 var reconnect = false;
 var reconnectName = null;
+var switchingDevice = false;
+
+var stopCurrentDevice = function () {
+
+	if (currentDevice) {
+
+	    var device = currentDevice;
+	    currentDevice = null;
+
+	    device.stop();
+
+	    NotificationService.notifyCastingStopped(device);
+
+	    // Clean up playing speaker icon
+	    deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
+
+	    // Switch tray icon
+	    mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
+	}
+    };
+
 
 var onStop = function() {
 
-    if (currentDevice == null) {
-	return;
+    if (switchingDevice) {
+       return;
     }
 
-    NotificationService.notifyCastingStopped(currentDevice);
+    if (currentDevice) {
 
-    // Clean up playing speaker icon
-    deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
+	    NotificationService.notifyCastingStopped(currentDevice);
 
-    // Switch tray icon
-    mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
+	    // Clean up playing speaker icon
+	    deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
 
-    LocalSourceSwitcher.resetOriginSource();
+	    // Switch tray icon
+	    mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
 
-    currentDevice = null;
+	    LocalSourceSwitcher.resetOriginSource();
+    }
 };
 
 var setSpeakIcon = function (item) {
@@ -67,6 +89,9 @@ var setSpeakIcon = function (item) {
 };
 
 var onStreamingUpdateUI = function () {
+
+	switchingDevice = false;
+
         // set speak icon when playing
         deviceListMenu.items.forEach(setSpeakIcon.bind({device: this.device}));
     	mb.tray.setContextMenu(menu);
@@ -80,6 +105,17 @@ var scanForDevices = function(self) {
     DeviceLookupService.lookUpDevices(function onDevice(device) {
 
 	var found = false;
+
+        switch (device.type) {
+            case DeviceMatcher.TYPES.CHROMECAST:
+		device.name = device.name + " (c)";
+		break;
+	    case DeviceMatcher.TYPES.UPNP:
+		device.name = device.name + " (u)";
+		break;
+		default:
+			break;
+	}
 
 	for (var n = 0; n < devicesAdded.length; n++) {
 		if(device.name.localeCompare(devicesAdded[n].name) == 0) {
@@ -98,64 +134,64 @@ var scanForDevices = function(self) {
         switch (device.type) {
             case DeviceMatcher.TYPES.CHROMECAST:
 
-                if (DeviceMatcher.isChromecast(device) || DeviceMatcher.isChromecastAudio(device)) {
+		device.controls = new ChromeCast(device);
 
-                    deviceListMenu.append(MenuFactory.chromeCastItem(device, function onClicked() {
-                        logger.info('Attempting to play to Chromecast', device.name);
+		var onClickedChc = function onClicked() {
 
-                        // Sets OSX selected input and output audio devices to Soundflower
-                        LocalSourceSwitcher.switchSource({
-                            output: 'Soundflower (2ch)',
-                            input: 'Soundflower (2ch)'
-                        });
+		    switchingDevice = true;
 
-                        if (!device.controls) {
-                            device.controls = new ChromeCast(device);
-                        }
-                        device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
-                    }));
-                }
+		    logger.info('Attempting to play to Chromecast', device.name);
+
+		    stopCurrentDevice();
+
+		    // Sets OSX selected input and output audio devices to Soundflower
+		    LocalSourceSwitcher.switchSource({
+			output: 'Soundflower (2ch)',
+			input: 'Soundflower (2ch)'
+		    });
+
+		    storage.set('reconnect', { 
+				    setting: reconnect,
+				    name: device.name
+			    }, function(error){
+				    if (error == null) {
+					    return;
+				    }
+				    logger.info("error while storing setting: %s", error.toString());
+			    });
+
+		    currentDevice = device.controls;
+
+		    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
+		};
+
+		deviceListMenu.append(MenuFactory.chromeCastItem(device, onClickedChc));
+		
+		if (reconnectName != null && (reconnectName.localeCompare(device.name) == 0)) {
+		    onClickedChc();
+		}
+
                 break;
+
             case DeviceMatcher.TYPES.UPNP:
 
-                if (DeviceMatcher.isSonos(device)) {
+                if (DeviceMatcher.isRaumfeld(device)) {
 
-                    deviceListMenu.append(MenuFactory.sonosDeviceItem(device, function onClicked() {
-                        logger.debug('TODO Sonos');
-                        // TODO on click integrate with sonos
-                    }));
-                }
-                else if (DeviceMatcher.isJongo(device)) {
-		
-                    deviceListMenu.append(MenuFactory.jongoDeviceItem(device, function onClicked() {
+                    device.controls = new RaumfeldZone(device);
 
-                        logger.info('Attempting to play to Jongo device', device.name);
+		    var onClickedUPnP = function onClicked() {
 
-                        // Sets OSX selected input and output audio devices to Soundflower
-                        LocalSourceSwitcher.switchSource({
-                            output: 'Soundflower (2ch)',
-                            input: 'Soundflower (2ch)'
-                        });
-
-                        if (!device.controls) {
-                            device.controls = new JongoSpeaker(device);
-                        }
-                        device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
-                    }));
-                }
-                else if (DeviceMatcher.isRaumfeld(device)) {
-
-		    var onClicked = function onClicked() {
+			switchingDevice = true;
 
                         logger.info('Attempting to play to Raumfeld device', device.name);
 
+		    	stopCurrentDevice();
+
                         // Sets OSX selected input and output audio devices to Soundflower
                         LocalSourceSwitcher.switchSource({
                             output: 'Soundflower (2ch)',
                             input: 'Soundflower (2ch)'
                         });
-
-                        device.controls = new RaumfeldZone(device);
 
 			currentDevice = device.controls;
 
@@ -177,12 +213,12 @@ var scanForDevices = function(self) {
                         device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
                     };
 		
-                    deviceListMenu.append(MenuFactory.raumfeldDeviceItem(device, onClicked));
+                    deviceListMenu.append(MenuFactory.raumfeldDeviceItem(device, onClickedUPnP));
 
 		    logger.info('Added Raumfeld menu item (reconnect name: %s)', reconnectName);
 
 		    if (reconnectName != null && (reconnectName.localeCompare(device.name) == 0)) {
-			onClicked();
+			onClickedUPnP();
 		    }
                 }
                 break;
@@ -313,7 +349,7 @@ mb.on('ready', function ready() {
         click: function () {
 
             // Attempt to stop all controls
-            attemptToStopAllDevices();
+            stopCurrentDevice();
 
             // Clean up playing speaker icon
             deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
@@ -325,19 +361,9 @@ mb.on('ready', function ready() {
         }
     }));
 
-   var attemptToStopAllDevices = function () {
-        devicesAdded.forEach(function (device) {
-            if (_.has(device, 'controls') && _.isFunction(device.controls.stop)) {
-                device.controls.stop(function (err, result) {
-                    // do something...
-                });
-            }
-        });
-    };
-
     var onQuitHandler = function () {
         mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
-        attemptToStopAllDevices();
+        stopCurrentDevice();
         LocalSoundStreamer.stopStream();
         LocalSourceSwitcher.resetOriginSource();
         mb.app.quit();
