@@ -204,7 +204,9 @@ mb.on('ready', function ready() {
     LocalSoundStreamer.startStream(function (streamUrl) {
         streamingAddress = streamUrl;
     }, new function(err){
-    });
+    }, new function() {
+	currentDevice.emit('stopped', null);	
+    ));
 
     // Stream Options
     var streamMenu = new Menu();
