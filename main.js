@@ -6,9 +6,9 @@ var path = require('path');
 var _ = require('lodash');
 
 //Electron dependencies
+const {app, dialog, Menu, MenuItem} = require('electron')
+
 var menubar = require('menubar');
-const {app, Menu, MenuItem} = require('electron')
-var dialog = require('dialog');
 var mb = menubar({dir: __dirname, icon: 'not-castingTemplate.png'});
 
 /* Internals */
