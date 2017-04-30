@@ -33,6 +33,25 @@ var deviceListMenu = null;
 var devicesAdded = [];
 var streamingAddress;
 
+var onStop = function() {
+
+    if (currentDevice == null) {
+	return;
+    }
+
+    NotificationService.notifyCastingStopped(currentDevice);
+
+    // Clean up playing speaker icon
+    deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
+
+    // Switch tray icon
+    mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
+
+    LocalSourceSwitcher.resetOriginSource();
+
+    currentDevice = null;
+};
+
 var setSpeakIcon = function (item) {
         if (item.label === this.device.name) {
             MenuFactory.setSpeaker(item);
@@ -132,16 +151,7 @@ var scanForDevices = function(self) {
                         device.controls = new RaumfeldZone(device);
 
 			device.controls.on('stopped', function(payload){
-
-		    	    NotificationService.notifyCastingStopped(device);
-
-			    // Clean up playing speaker icon
-			    deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
-
-			    // Switch tray icon
-			    mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
-
-			    LocalSourceSwitcher.resetOriginSource();
+				onStop();
 			});
 
 			currentDevice = device.controls;
@@ -203,10 +213,10 @@ mb.on('ready', function ready() {
  
     LocalSoundStreamer.startStream(function (streamUrl) {
         streamingAddress = streamUrl;
-    }, new function(err){
-    }, new function() {
-	currentDevice.emit('stopped', null);	
-    ));
+    }, function(err){
+    }, function() {
+	onStop();
+    });
 
     // Stream Options
     var streamMenu = new Menu();
