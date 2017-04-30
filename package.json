@@ -8,7 +8,6 @@
     "url": "https://github.com/md5555/devicecast"
   },
   "dependencies": {
-    "osx-audio": "1.0.0",
     "upnp-ssdp": "0.0.2",
     "dialog": "~0.2.0",
     "bindings": "~1.1.1",
@@ -24,10 +23,11 @@
     "valid-url": "1.0.9",
     "webcast-osx-audio": "^1.0.1",
     "winston": "2.1.1"
-  },  "devDependencies": {
+  },
+  "devDependencies": {
     "electron-packager": "^8.6.0",
     "electron-prebuilt": "1.4.13",
-    "electron-rebuild": "1.5.7"
+    "electron-rebuild": "^1.5.7"
   },
   "main": "main.js",
   "scripts": {
