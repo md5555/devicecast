@@ -20,7 +20,7 @@ var DeviceMatcher = require('./lib/device/utils/DeviceMatcher');
 var LocalSourceSwitcher = require('./lib/device/utils/LocalSourceSwitcher');
 var UpnpMediaClientUtils = require('./lib/device/utils/UpnpMediaClientUtils');
 
-var LocalSoundStreamer = require('./lib/sound/LocalSoundStreamerExec');
+var LocalSoundStreamer = require('./lib/sound/LocalSoundStreamerWebcast');
 
 /* Various Device controllers */
 var JongoSpeaker = require('./lib/device/controls/JongoSpeaker');
@@ -49,7 +49,7 @@ var onStreamingUpdateUI = function () {
         mb.tray.setImage(path.join(__dirname, 'castingTemplate.png'));
     };
 
-var scanForDevices = function() {
+var scanForDevices = function(self) {
 
     DeviceLookupService.lookUpDevices(function onDevice(device) {
 
@@ -131,17 +131,15 @@ var scanForDevices = function() {
 
                         device.controls = new RaumfeldZone(device);
 
-			var self = this;
-
 			device.controls.on('stopped', function(payload){
 
-		    	    NotificationService.notifyCastingStopped(self.device);
+		    	    NotificationService.notifyCastingStopped(device);
 
 			    // Clean up playing speaker icon
-			    self.deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
+			    deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
 
 			    // Switch tray icon
-			    self.mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
+			    mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
 
 			    LocalSourceSwitcher.resetOriginSource();
 			});
@@ -203,18 +201,9 @@ mb.on('ready', function ready() {
         }
     }));
  
-    LocalSoundStreamer.startStream(function (err, streamUrl) {
-        if (err) {
-            logger.info('Streaming process died', err);
-            dialog.showMessageBox({
-                title: 'Error',
-                message: 'Streaming has crashed, you may need to restart the application!',
-                detail: err.toString(),
-                buttons: ["OK"]
-            });
-        } else {
-            streamingAddress = streamUrl;
-        }
+    LocalSoundStreamer.startStream(function (streamUrl) {
+        streamingAddress = streamUrl;
+    }, new function(err){
     });
 
     // Stream Options

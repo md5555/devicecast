@@ -8,6 +8,7 @@
     "url": "https://github.com/md5555/devicecast"
   },
   "dependencies": {
+    "osx-audio": "1.0.0",
     "upnp-ssdp": "0.0.2",
     "dialog": "~0.2.0",
     "bindings": "~1.1.1",
