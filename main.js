@@ -138,7 +138,7 @@ var scanForDevices = function() {
 		    	    NotificationService.notifyCastingStopped(self.device);
 
 			    // Clean up playing speaker icon
-			    self.menu.items.forEach(MenuFactory.removeSpeaker);
+			    self.deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
 
 			    // Switch tray icon
 			    self.mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
@@ -179,14 +179,6 @@ mb.on('ready', function ready() {
     menu = new Menu();
     deviceListMenu = new Menu();
  
-   //Refresh
-    menu.append(new MenuItem({
-        label: 'Refresh Devices...',
-        click: function () {
-	   scanForDevices();
-        }
-    }));
-
     menu.append(MenuFactory.castToDeviceMenu(deviceListMenu));
 
     menu.append(MenuFactory.separator());
@@ -271,7 +263,7 @@ mb.on('ready', function ready() {
             attemptToStopAllDevices();
 
             // Clean up playing speaker icon
-            menu.items.forEach(MenuFactory.removeSpeaker);
+            deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
 
             // Switch tray icon
             mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
