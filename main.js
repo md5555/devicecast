@@ -4,12 +4,10 @@
 require('shelljs/global');
 var path = require('path');
 var _ = require('lodash');
-var iohook = require('iohook');
 
 //Electron dependencies
 var menubar = require('menubar');
-var Menu = require('menu');
-var MenuItem = require('menu-item');
+const {app, Menu, MenuItem} = require('electron')
 var dialog = require('dialog');
 var mb = menubar({dir: __dirname, icon: 'not-castingTemplate.png'});
 
@@ -34,6 +32,19 @@ var menu = null;
 var deviceListMenu = null;
 var devicesAdded = [];
 var streamingAddress;
+
+var setSpeakIcon = function (item) {
+        if (item.label === this.device.name) {
+            MenuFactory.setSpeaker(item);
+        } else {
+            MenuFactory.removeSpeaker(item);
+        }
+};
+
+var disableAllItems = function (item) {
+        item.enabled = false
+};
+ 
 var onStreamingUpdateUI = function () {
         //Disables all devices until further stop
         deviceListMenu.items.forEach(disableAllItems);
@@ -42,7 +53,6 @@ var onStreamingUpdateUI = function () {
         deviceListMenu.items.forEach(setSpeakIcon.bind({device: this.device}));
 
         // Enable 'Stop Casting' item
-        menu.items[7].enabled = true;
 
         // Changes tray icon to "Casting"
         mb.tray.setImage(path.join(__dirname, 'castingTemplate.png'));
@@ -52,18 +62,26 @@ var scanForDevices = function() {
 
     DeviceLookupService.lookUpDevices(function onDevice(device) {
 
+	var found = false;
+
 	for (var n = 0; n < devicesAdded.length; n++) {
 		if(device.name.localeCompare(devicesAdded[n].name) == 0) {
-			return;
+			devicesAdded[n] = device;
+			found = true;
+			break; 
 		}
 	}
+
+	if (!found) {
+	   devicesAdded.push(device);
+	} else {
+	   return;
+        }
 
         switch (device.type) {
             case DeviceMatcher.TYPES.CHROMECAST:
 
                 if (DeviceMatcher.isChromecast(device) || DeviceMatcher.isChromecastAudio(device)) {
-
-		    devicesAdded.push(device);
 
                     deviceListMenu.append(MenuFactory.chromeCastItem(device, function onClicked() {
                         logger.info('Attempting to play to Chromecast', device.name);
@@ -85,8 +103,6 @@ var scanForDevices = function() {
 
                 if (DeviceMatcher.isSonos(device)) {
 
-		    devicesAdded.push(device);
-
                     deviceListMenu.append(MenuFactory.sonosDeviceItem(device, function onClicked() {
                         logger.debug('TODO Sonos');
                         // TODO on click integrate with sonos
@@ -94,8 +110,6 @@ var scanForDevices = function() {
                 }
                 else if (DeviceMatcher.isJongo(device)) {
 		
-		    devicesAdded.push(device);
-
                     deviceListMenu.append(MenuFactory.jongoDeviceItem(device, function onClicked() {
 
                         logger.info('Attempting to play to Jongo device', device.name);
@@ -114,8 +128,6 @@ var scanForDevices = function() {
                 }
                 else if (DeviceMatcher.isRaumfeld(device)) {
 		
-		    devicesAdded.push(device);
-
                     deviceListMenu.append(MenuFactory.raumfeldDeviceItem(device, function onClicked() {
 
                         logger.info('Attempting to play to Raumfeld device', device.name);
@@ -128,6 +140,11 @@ var scanForDevices = function() {
 
                         device.controls = new RaumfeldZone(device);
 			currentDevice = device.controls;
+
+			device.controls.registerErrorHandler(function(err){
+				dialog.showErrorBox("devicecast - An Error Occurred",
+						err.toString());
+			});
 
                         device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
                     }));
@@ -146,12 +163,6 @@ var scanForDevices = function() {
 
 //Menubar construction
 mb.on('ready', function ready() {
-
-ioHook.on("keydown", event => {
-  console.log(event);
-});
-
-ioHook.start(true);
 
     //Menu startup message
     menu = new Menu();
@@ -252,12 +263,11 @@ ioHook.start(true);
             // FIXME: menu.items.forEach(MenuFactory.removeSpeaker);
 
             // Re-Enable all devices until further notice
-            for (var j = 0; j < menu.items.length; j++) {
+            for (var j = 0; j < deviceListMenu.items.length; j++) {
                 deviceListMenu.items[j].enabled = true;
             }
 
             // Disable 'Stop Casting' item
-            menu.items[7].enabled = false;
 
             // Switch tray icon
             mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
@@ -266,11 +276,7 @@ ioHook.start(true);
         }
     }));
 
-    var disableAllItems = function (item) {
-        item.enabled = false
-    };
-
-    var attemptToStopAllDevices = function () {
+   var attemptToStopAllDevices = function () {
         devicesAdded.forEach(function (device) {
             if (_.has(device, 'controls') && _.isFunction(device.controls.stop)) {
                 device.controls.stop(function (err, result) {
@@ -278,14 +284,6 @@ ioHook.start(true);
                 });
             }
         });
-    };
-
-    var setSpeakIcon = function (item) {
-        if (item.label === this.device.name) {
-            MenuFactory.setSpeaker(item);
-        } else {
-            MenuFactory.removeSpeaker(item);
-        }
     };
 
     var onQuitHandler = function () {
