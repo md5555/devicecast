@@ -27,6 +27,7 @@ var LocalSoundStreamer = require('./lib/sound/LocalSoundStreamerWebcast');
 var RaumfeldZone = require('./lib/device/controls/RaumfeldZone');
 var ChromeCast = require('./lib/device/controls/ChromeCast');
 var logger = require('./lib/common/logger');
+const osxsleep = require ('osxsleep');
 
 var currentDevice = null;
 var menu = null;
@@ -36,17 +37,17 @@ var streamingAddress;
 var reconnect = false;
 var reconnectName = null;
 var switchingDevice = false;
+var isStreaming = false;
 
 var stopCurrentDevice = function () {
 
 	if (currentDevice) {
 
 	    var device = currentDevice;
-	    currentDevice = null;
 
-	    device.stop();
+	    device.controls.stop();
 
-	    NotificationService.notifyCastingStopped(device);
+	    NotificationService.notifyCastingStopped(device.controls);
 
 	    // Clean up playing speaker icon
 	    deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
@@ -56,6 +57,21 @@ var stopCurrentDevice = function () {
 	}
     };
 
+var onStartStream = function() {
+
+    if (isStreaming) {
+	return;
+    }
+
+    isStreaming = true;
+
+    LocalSoundStreamer.startStream(function (streamUrl) {
+        streamingAddress = streamUrl;
+    }, function(err){
+    }, function() {
+	onStop();
+    });
+};
 
 var onStop = function() {
 
@@ -63,9 +79,11 @@ var onStop = function() {
        return;
     }
 
+    isStreaming = false;
+
     if (currentDevice) {
 
-	    NotificationService.notifyCastingStopped(currentDevice);
+	    NotificationService.notifyCastingStopped(currentDevice.controls);
 
 	    // Clean up playing speaker icon
 	    deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
@@ -136,7 +154,9 @@ var scanForDevices = function(self) {
 
 		device.controls = new ChromeCast(device);
 
-		var onClickedChc = function onClicked() {
+		var doConnectCast = function onClicked() {
+
+		    onStartStream();
 
 		    switchingDevice = true;
 
@@ -160,15 +180,17 @@ var scanForDevices = function(self) {
 				    logger.info("error while storing setting: %s", error.toString());
 			    });
 
-		    currentDevice = device.controls;
+		    currentDevice = device;
 
 		    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
 		};
 
-		deviceListMenu.append(MenuFactory.chromeCastItem(device, onClickedChc));
+		device.doConnect = doConnectCast;
+
+		deviceListMenu.append(MenuFactory.chromeCastItem(device, doConnectCast));
 		
 		if (reconnectName != null && (reconnectName.localeCompare(device.name) == 0)) {
-		    onClickedChc();
+		    doConnectCast();
 		}
 
                 break;
@@ -179,7 +201,9 @@ var scanForDevices = function(self) {
 
                     device.controls = new RaumfeldZone(device);
 
-		    var onClickedUPnP = function onClicked() {
+		    var doConnectUPnP = function onClicked() {
+
+		    	onStartStream();
 
 			switchingDevice = true;
 
@@ -193,7 +217,7 @@ var scanForDevices = function(self) {
                             input: 'Soundflower (2ch)'
                         });
 
-			currentDevice = device.controls;
+			currentDevice = device;
 
 			storage.set('reconnect', { 
 					setting: reconnect,
@@ -206,19 +230,22 @@ var scanForDevices = function(self) {
 				});
 
 			device.controls.registerErrorHandler(function(err){
-				dialog.showErrorBox("devicecast - An Error Occurred",
-						err.toString());
+				/*dialog.showErrorBox("devicecast - An Error Occurred",
+						err.toString());*/
+				onStop();
 			});
 
                         device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
                     };
+
+		    device.doConnect = doConnectUPnP;
 		
-                    deviceListMenu.append(MenuFactory.raumfeldDeviceItem(device, onClickedUPnP));
+                    deviceListMenu.append(MenuFactory.raumfeldDeviceItem(device, doConnectUPnP));
 
 		    logger.info('Added Raumfeld menu item (reconnect name: %s)', reconnectName);
 
 		    if (reconnectName != null && (reconnectName.localeCompare(device.name) == 0)) {
-			onClickedUPnP();
+			doConnectUPnP();
 		    }
                 }
                 break;
@@ -233,6 +260,22 @@ var scanForDevices = function(self) {
 
 //Menubar construction
 mb.on('ready', function ready() {
+
+    osxsleep.OSXSleep.start(function(state) {
+	logger.info("sleep state: %d", state);
+
+	switch (state) {
+		case osxsleep.HAS_POWERED_ON:
+			if (currentDevice) {
+				currentDevice.doConnect();
+			}
+			break;
+		case osxsleep.WILL_SLEEP:
+			stopCurrentDevice();
+			LocalSoundStreamer.stopStream();
+			break;
+	}
+    });
   
     storage.get('reconnect',
 		function(error, object){
@@ -285,7 +328,7 @@ mb.on('ready', function ready() {
 
 		if (!currentDevice) return;
 
-		currentDevice.volumeUp();
+		currentDevice.controls.volumeUp();
         }
     }));
 
@@ -295,17 +338,10 @@ mb.on('ready', function ready() {
 
 		if (!currentDevice) return;
 	
-		currentDevice.volumeDown();
+		currentDevice.controls.volumeDown();
         }
     }));
  
-    LocalSoundStreamer.startStream(function (streamUrl) {
-        streamingAddress = streamUrl;
-    }, function(err){
-    }, function() {
-	onStop();
-    });
-
     // Stream Options
     var streamMenu = new Menu();
     streamMenu.append(new MenuItem({
