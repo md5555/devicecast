@@ -8,6 +8,9 @@ Based on the work done by [@andresgottlieb](https://github.com/andresgottlieb) a
 * Scan the network for available Chromecasts (Both HDMI & Audio)
 * Redirect internal Mac OSX sound through Soundflower to create a reliable stream of sound
 * Direct this Stream over UPNP or Google Cast
+* Full-featured switch between devices
+* Reconnect to previous device on initial scan when starting up
+* Suspend and resume streaming when Mac goes to sleep and wakes up
 
 ## Installation
 
