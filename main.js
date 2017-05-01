@@ -398,6 +398,7 @@ mb.on('ready', function ready() {
     }));
 
     var onQuitHandler = function () {
+	osxsleep.OSXSleep.stop();
         mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
         stopCurrentDevice();
         LocalSoundStreamer.stopStream();
