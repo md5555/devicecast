@@ -267,12 +267,13 @@ mb.on('ready', function ready() {
 	switch (state) {
 		case osxsleep.HAS_POWERED_ON:
 			if (currentDevice) {
-				currentDevice.doConnect();
+			    currentDevice.doConnect();
 			}
 			break;
 		case osxsleep.WILL_SLEEP:
-			stopCurrentDevice();
 			LocalSoundStreamer.stopStream();
+			stopCurrentDevice();
+			isStreaming = false;
 			break;
 	}
     });
