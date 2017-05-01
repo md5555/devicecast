@@ -39,6 +39,16 @@ var reconnectName = null;
 var switchingDevice = false;
 var isStreaming = false;
 
+var fullReset = function() {
+
+	LocalSoundStreamer.stopStream();
+	stopCurrentDevice();
+
+	if (currentDevice != null) {
+	    currentDevice.doConnect();
+	}
+};
+
 var stopCurrentDevice = function () {
 
 	if (currentDevice) {
@@ -137,7 +147,6 @@ var scanForDevices = function(self) {
 
 	for (var n = 0; n < devicesAdded.length; n++) {
 		if(device.name.localeCompare(devicesAdded[n].name) == 0) {
-			devicesAdded[n] = device;
 			found = true;
 			break; 
 		}
@@ -156,9 +165,9 @@ var scanForDevices = function(self) {
 
 		var doConnectCast = function onClicked() {
 
-		    onStartStream();
-
 		    switchingDevice = true;
+
+		    onStartStream();
 
 		    logger.info('Attempting to play to Chromecast', device.name);
 
@@ -203,9 +212,9 @@ var scanForDevices = function(self) {
 
 		    var doConnectUPnP = function onClicked() {
 
-		    	onStartStream();
-
 			switchingDevice = true;
+
+		    	onStartStream();
 
                         logger.info('Attempting to play to Raumfeld device', device.name);
 
@@ -271,9 +280,13 @@ mb.on('ready', function ready() {
 			}
 			break;
 		case osxsleep.WILL_SLEEP:
-			LocalSoundStreamer.stopStream();
+
+			switchingDevice = true;
 			stopCurrentDevice();
+
+			LocalSoundStreamer.stopStream();
 			isStreaming = false;
+
 			break;
 	}
     });
@@ -293,6 +306,7 @@ mb.on('ready', function ready() {
 
     process.on('uncaughtException', function(err) {
 	dialog.showErrorBox("devicecast - An Error Occurred", err.toString());
+	fullReset();
     });
 
     //Menu startup message
@@ -387,6 +401,8 @@ mb.on('ready', function ready() {
 
             // Attempt to stop all controls
             stopCurrentDevice();
+
+	    LocalSoundStreamer.stopStream();
 
             // Clean up playing speaker icon
             deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
