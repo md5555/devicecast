@@ -32,4 +32,4 @@ Don't forget rebooting your computer between both steps.
 
 ## Development
 
-- To package the app, use [electron-packager](https://github.com/maxogden/electron-packager) `./build_app.sh` (currently broken)
+- To package the app, `./build_app.sh`. It will use electron-packager to package an .app bundle. The bundle size is expectedly large as it includes the entire Node+electron platform.
