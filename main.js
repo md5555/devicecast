@@ -53,6 +53,8 @@ var stopCurrentDevice = function (callback) {
 
 	if (currentDevice) {
 
+	    logger.info("Stopping CURRENT device %s", currentDevice.name);
+
 	    var device = currentDevice;
 
 	    device.controls.stop(function(){
@@ -73,10 +75,11 @@ var stopCurrentDevice = function (callback) {
 	}
     };
 
-var onStartStream = function() {
+var onStartStream = function(cb) {
 
     LocalSoundStreamer.startStream(function (streamUrl) {
         streamingAddress = streamUrl;
+	if (cb) cb();
     }, function(err){
     }, function() {
 	onStop();
@@ -85,11 +88,7 @@ var onStartStream = function() {
 
 var onStop = function() {
 
-    if (switchingDevice) {
-       return;
-    }
-
-    stopCurrentDevice();
+    onStartStream();
 };
 
 var setSpeakIcon = function (item) {
@@ -158,8 +157,6 @@ var scanForDevices = function(self) {
 
 		    stopCurrentDevice(function() {
 
-			    onStartStream();
-
 			    // Sets OSX selected input and output audio devices to Soundflower
 			    LocalSourceSwitcher.switchSource({
 				output: 'Soundflower (2ch)',
@@ -208,8 +205,6 @@ var scanForDevices = function(self) {
 
 		    	stopCurrentDevice(function() {
 		
-				onStartStream();
-
 				// Sets OSX selected input and output audio devices to Soundflower
 				LocalSourceSwitcher.switchSource({
 				    output: 'Soundflower (2ch)',
@@ -422,5 +417,5 @@ mb.on('ready', function ready() {
     // Set the menu items
     mb.tray.setContextMenu(menu);
 
-    scanForDevices();
+    onStartStream(() => scanForDevices());
 });
