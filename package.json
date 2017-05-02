@@ -8,6 +8,7 @@
     "url": "https://github.com/md5555/devicecast"
   },
   "dependencies": {
+    "exec": "0.2.1",
     "osxsleep": "md5555/osxsleep",
     "nodobjc": "2.1.0",
     "eslint": "3.19.0",
@@ -27,7 +28,7 @@
     "shelljs": "0.5.3",
     "upnp-mediarenderer-client": "1.2.4",
     "valid-url": "1.0.9",
-    "webcast-osx-audio": "^1.0.1",
+    "osx-audio": "1.0.0",
     "winston": "2.1.1"
   },
   "devDependencies": {

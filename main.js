@@ -37,12 +37,12 @@ var streamingAddress;
 var reconnect = false;
 var reconnectName = null;
 var switchingDevice = false;
-var isStreaming = false;
 
 var fullReset = function() {
 
-	LocalSoundStreamer.stopStream();
 	stopCurrentDevice();
+
+	LocalSoundStreamer.stopStream();
 
 	if (currentDevice != null) {
 	    currentDevice.doConnect();
@@ -69,11 +69,9 @@ var stopCurrentDevice = function () {
 
 var onStartStream = function() {
 
-    if (isStreaming) {
-	return;
+    if (LocalSoundStreamer.getIsStreaming()) {
+       	return; 
     }
-
-    isStreaming = true;
 
     LocalSoundStreamer.startStream(function (streamUrl) {
         streamingAddress = streamUrl;
@@ -89,20 +87,7 @@ var onStop = function() {
        return;
     }
 
-    isStreaming = false;
-
-    if (currentDevice) {
-
-	    NotificationService.notifyCastingStopped(currentDevice.controls);
-
-	    // Clean up playing speaker icon
-	    deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
-
-	    // Switch tray icon
-	    mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
-
-	    LocalSourceSwitcher.resetOriginSource();
-    }
+    stopCurrentDevice();
 };
 
 var setSpeakIcon = function (item) {
@@ -284,9 +269,6 @@ mb.on('ready', function ready() {
 			switchingDevice = true;
 			stopCurrentDevice();
 
-			LocalSoundStreamer.stopStream();
-			isStreaming = false;
-
 			break;
 	}
     });
@@ -305,8 +287,8 @@ mb.on('ready', function ready() {
 	    	});
 
     process.on('uncaughtException', function(err) {
-	dialog.showErrorBox("devicecast - An Error Occurred", err.toString());
 	fullReset();
+	dialog.showErrorBox("devicecast - An Error Occurred", err.toString());
     });
 
     //Menu startup message
@@ -402,15 +384,8 @@ mb.on('ready', function ready() {
             // Attempt to stop all controls
             stopCurrentDevice();
 
-	    LocalSoundStreamer.stopStream();
-
             // Clean up playing speaker icon
             deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
-
-            // Switch tray icon
-            mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
-
-            LocalSourceSwitcher.resetOriginSource();
         }
     }));
 
