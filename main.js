@@ -49,29 +49,31 @@ var fullReset = function() {
 	}
 };
 
-var stopCurrentDevice = function () {
+var stopCurrentDevice = function (callback) {
 
 	if (currentDevice) {
 
 	    var device = currentDevice;
 
-	    device.controls.stop();
+	    device.controls.stop(function(){
 
-	    NotificationService.notifyCastingStopped(device.controls);
+		    // Show user notification
+		    NotificationService.notifyCastingStopped(device.controls);
 
-	    // Clean up playing speaker icon
-	    deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
+		    // Clean up playing speaker icon
+		    deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
 
-	    // Switch tray icon
-	    mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
+		    // Switch tray icon
+		    mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
+
+		    if (callback) callback();
+	    });
+	} else {
+	    if (callback) callback();
 	}
     };
 
 var onStartStream = function() {
-
-    if (LocalSoundStreamer.getIsStreaming()) {
-       	return; 
-    }
 
     LocalSoundStreamer.startStream(function (streamUrl) {
         streamingAddress = streamUrl;
@@ -152,31 +154,34 @@ var scanForDevices = function(self) {
 
 		    switchingDevice = true;
 
-		    onStartStream();
-
 		    logger.info('Attempting to play to Chromecast', device.name);
 
-		    stopCurrentDevice();
+		    stopCurrentDevice(function() {
 
-		    // Sets OSX selected input and output audio devices to Soundflower
-		    LocalSourceSwitcher.switchSource({
-			output: 'Soundflower (2ch)',
-			input: 'Soundflower (2ch)'
-		    });
+			    onStartStream();
 
-		    storage.set('reconnect', { 
-				    setting: reconnect,
-				    name: device.name
-			    }, function(error){
-				    if (error == null) {
-					    return;
-				    }
-				    logger.info("error while storing setting: %s", error.toString());
+			    // Sets OSX selected input and output audio devices to Soundflower
+			    LocalSourceSwitcher.switchSource({
+				output: 'Soundflower (2ch)',
+				input: 'Soundflower (2ch)'
 			    });
 
-		    currentDevice = device;
+			    storage.set('reconnect', { 
+					    setting: reconnect,
+					    name: device.name
+				    }, function(error){
+					    if (error == null) {
+						    return;
+					    }
+					    logger.info("error while storing setting: %s", error.toString());
+				    });
 
-		    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
+			    currentDevice = device;
+
+			    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
+
+		    });
+
 		};
 
 		device.doConnect = doConnectCast;
@@ -199,37 +204,40 @@ var scanForDevices = function(self) {
 
 			switchingDevice = true;
 
-		    	onStartStream();
-
                         logger.info('Attempting to play to Raumfeld device', device.name);
 
-		    	stopCurrentDevice();
+		    	stopCurrentDevice(function() {
+		
+				onStartStream();
 
-                        // Sets OSX selected input and output audio devices to Soundflower
-                        LocalSourceSwitcher.switchSource({
-                            output: 'Soundflower (2ch)',
-                            input: 'Soundflower (2ch)'
-                        });
-
-			currentDevice = device;
-
-			storage.set('reconnect', { 
-					setting: reconnect,
-					name: device.name
-				}, function(error){
-					if (error == null) {
-						return;
-					}
-					logger.info("error while storing setting: %s", error.toString());
+				// Sets OSX selected input and output audio devices to Soundflower
+				LocalSourceSwitcher.switchSource({
+				    output: 'Soundflower (2ch)',
+				    input: 'Soundflower (2ch)'
 				});
 
-			device.controls.registerErrorHandler(function(err){
-				/*dialog.showErrorBox("devicecast - An Error Occurred",
-						err.toString());*/
-				onStop();
+				currentDevice = device;
+
+				storage.set('reconnect', { 
+						setting: reconnect,
+						name: device.name
+					}, function(error){
+						if (error == null) {
+							return;
+						}
+						logger.info("error while storing setting: %s", error.toString());
+					});
+
+				device.controls.registerErrorHandler(function(err){
+					/*dialog.showErrorBox("devicecast - An Error Occurred",
+							err.toString());*/
+					onStop();
+				});
+
+				device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
+
 			});
 
-                        device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
                     };
 
 		    device.doConnect = doConnectUPnP;
@@ -383,6 +391,7 @@ mb.on('ready', function ready() {
 
             // Attempt to stop all controls
             stopCurrentDevice();
+	    currentDevice = null;
 
             // Clean up playing speaker icon
             deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
