@@ -88,6 +88,10 @@ var onStartStream = function(cb) {
 
 var onStop = function() {
 
+    if (switchingDevice) {
+        return;
+    }
+
     onStartStream();
 };
 
@@ -155,13 +159,17 @@ var scanForDevices = function(self) {
 
 		    logger.info('Attempting to play to Chromecast', device.name);
 
-		    stopCurrentDevice(function() {
+		    LocalSoundStreamer.stopStream();
 
+		    stopCurrentDevice(function() {
+	
 			    // Sets OSX selected input and output audio devices to Soundflower
 			    LocalSourceSwitcher.switchSource({
 				output: 'Soundflower (2ch)',
 				input: 'Soundflower (2ch)'
 			    });
+
+			    onStartStream();
 
 			    storage.set('reconnect', { 
 					    setting: reconnect,
@@ -176,7 +184,6 @@ var scanForDevices = function(self) {
 			    currentDevice = device;
 
 			    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
-
 		    });
 
 		};
@@ -203,6 +210,8 @@ var scanForDevices = function(self) {
 
                         logger.info('Attempting to play to Raumfeld device', device.name);
 
+			LocalSoundStreamer.stopStream();
+
 		    	stopCurrentDevice(function() {
 		
 				// Sets OSX selected input and output audio devices to Soundflower
@@ -210,6 +219,8 @@ var scanForDevices = function(self) {
 				    output: 'Soundflower (2ch)',
 				    input: 'Soundflower (2ch)'
 				});
+
+			    	onStartStream();
 
 				currentDevice = device;
 
