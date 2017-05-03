@@ -41,7 +41,7 @@
   },
   "main": "main.js",
   "scripts": {
-    "start": "electron . --icon assets/icon.icns"
+    "start": "electron . --icon assets/icon.icns --debug"
   },
   "license": "MIT",
   "engines": {

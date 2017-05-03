@@ -113,13 +113,20 @@ var onStop = function() {
     if (switchingDevice) {
         return;
     }
-
-    onStartStream();
+   
+    onStartStream(function(){
+	if (currentDevice) {
+	    currentDevice.doConnect();
+	}
+    });
 };
 
 var onStreamingUpdateUI = function () {
 
 	switchingDevice = false;
+
+	deviceListMenu.setIcon(0, null);
+	deviceListMenu.setIcon(1, null);
 
 	for (var n = 0; n < this.opMenu.items.length; n++) {
 		if (this.opMenu.items[n].label === this.device.name) {
@@ -165,6 +172,7 @@ var scanForDevices = function(self) {
 		    device.controls = new ChromeCast(device);
 
 		    switchingDevice = true;
+		    LocalSoundStreamer.stopStream();
 
 		    logger.info('Attempting to play to Chromecast', device.name);
 
@@ -175,8 +183,6 @@ var scanForDevices = function(self) {
 				output: 'Soundflower (2ch)',
 				input: 'Soundflower (2ch)'
 			    });
-
-			    onStartStream();
 
 			    storage.set('reconnect', { 
 					    setting: reconnect,
@@ -190,7 +196,10 @@ var scanForDevices = function(self) {
 
 			    currentDevice = device;
 
-			    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device, a: 0, opMenu: deviceMenuChromecast}));
+			    onStartStream(function() {
+			        device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device, a: 0, opMenu: deviceMenuChromecast}));
+			    });
+
 		    }, device);
 
 		};
@@ -210,6 +219,7 @@ var scanForDevices = function(self) {
                         device.controls = new RaumfeldZone(device);
 
 			switchingDevice = true;
+			LocalSoundStreamer.stopStream();
 
                         logger.info('Attempting to play to Raumfeld device', device.name);
 
@@ -220,8 +230,6 @@ var scanForDevices = function(self) {
 				    output: 'Soundflower (2ch)',
 				    input: 'Soundflower (2ch)'
 				});
-
-			    	onStartStream();
 
 				currentDevice = device;
 
@@ -235,17 +243,14 @@ var scanForDevices = function(self) {
 						logger.info("error while storing setting: %s", error.toString());
 					});
 
-				device.controls.on('stopped', function() {
-					if (device == currentDevice && !switchingDevice) {
-					    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device, a: 1, opMenu: deviceMenuUPnP}));
-					}
-				});
-
 				device.controls.registerErrorHandler(function(err){
-					onStop();
+				   onStop();
 				});
 
-				device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device, a: 1, opMenu: deviceMenuUPnP}));
+				onStartStream(function() {
+				    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device, a: 1, opMenu: deviceMenuUPnP}));
+				});
+
 			}, device);
 
                     };
@@ -410,6 +415,7 @@ mb.on('ready', function ready() {
     }));
 
     var onQuitHandler = function () {
+	switchingDevice = true;
 	osxsleep.OSXSleep.stop();
         mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
         stopCurrentDevice();
