@@ -31,18 +31,19 @@ const osxsleep = require ('osxsleep');
 
 var currentDevice = null;
 var menu = null;
-var deviceListMenu = null;
 var devicesAdded = [];
 var streamingAddress;
 var reconnect = false;
 var reconnectName = null;
 var switchingDevice = false;
 
+var deviceMenuChromecast = null;
+var deviceMenuUPnP = null;
+var deviceListMenu = null;
+
 var fullReset = function() {
 
 	stopCurrentDevice();
-
-	LocalSoundStreamer.stopStream();
 
 	if (currentDevice != null) {
 	    currentDevice.doConnect();
@@ -60,9 +61,17 @@ var stopDevice = function (callback, device) {
 		    // Show user notification
 		    NotificationService.notifyCastingStopped(device.controls);
 
-		    // Clean up playing speaker icon
-		    for (var n = 0; n < deviceListMenu.items.length; n++) {
-			    deviceListMenu.setIcon(n, null);
+		    var menus = [ deviceListMenu, deviceMenuChromecast, deviceMenuUPnP ];
+
+		    // set cast icon when playing
+
+		    for (var a = 0; a < menus.length; a++) {
+
+			    var opMenu = menus[a];
+
+			    for (var n = 0; n < opMenu.items.length; n++) {
+				opMenu.setIcon(n, null);
+			    }
 		    }
 
 		    // Switch tray icon
@@ -112,22 +121,17 @@ var onStreamingUpdateUI = function () {
 
 	switchingDevice = false;
 
-        // set speak icon when playing
-	for (var n = 0; n < deviceListMenu.items.length; n++) {
-
-		logger.info("item label: [%s]   device: [%s]", deviceListMenu.items[n].label, this.device.name);
-
-		if (deviceListMenu.items[n].label === this.device.name) {
+	for (var n = 0; n < this.opMenu.items.length; n++) {
+		if (this.opMenu.items[n].label === this.device.name) {
 			logger.info("Setting icon!");
-			var castIcon = nativeImage.createFromPath(path.join(__dirname, 'castingTemplate.png'));
-			deviceListMenu.setIcon(n, castIcon);
+			var castIcon = nativeImage.createFromPath(path.join(__dirname, 'castingTemplate-small.png'));
+			this.opMenu.setIcon(n, castIcon);
+			deviceListMenu.setIcon(this.a, castIcon);
 		}
-        }
+	}
 
-    	mb.tray.setContextMenu(menu);
-
-        // Changes tray icon to "Casting"
         mb.tray.setImage(path.join(__dirname, 'castingTemplate.png'));
+    	mb.tray.setContextMenu(menu);
     };
 
 var scanForDevices = function(self) {
@@ -136,21 +140,14 @@ var scanForDevices = function(self) {
 
 	var found = false;
 
-        switch (device.type) {
-            case DeviceMatcher.TYPES.CHROMECAST:
-		device.name = "Chromecast: "+device.name;
-		break;
-	    case DeviceMatcher.TYPES.UPNP:
-		device.name = "UPnP: " + device.name; 
-		break;
-		default:
-			break;
-	}
-
 	for (var n = 0; n < devicesAdded.length; n++) {
-		if(device.name.localeCompare(devicesAdded[n].name) == 0) {
-			found = true;
-			break; 
+
+		var n0 = device.name+":"+device.type;
+		var n1 = devicesAdded[n].name+":"+devicesAdded[n].type;
+
+		if(n0 == n1) {
+	            found = true;
+		    break; 
 		}
 	}
 
@@ -170,8 +167,6 @@ var scanForDevices = function(self) {
 		    switchingDevice = true;
 
 		    logger.info('Attempting to play to Chromecast', device.name);
-
-		    LocalSoundStreamer.stopStream();
 
 		    stopCurrentDeviceMatch(function() {
 	
@@ -195,19 +190,15 @@ var scanForDevices = function(self) {
 
 			    currentDevice = device;
 
-			    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
+			    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device, a: 0, opMenu: deviceMenuChromecast}));
 		    }, device);
 
 		};
 
 		device.doConnect = doConnectCast;
 
-		deviceListMenu.append(MenuFactory.chromeCastItem(device, doConnectCast));
+		deviceMenuChromecast.append(MenuFactory.chromeCastItem(device, doConnectCast));
 		
-		if (reconnectName != null && (reconnectName.localeCompare(device.name) == 0)) {
-		    doConnectCast();
-		}
-
                 break;
 
             case DeviceMatcher.TYPES.UPNP:
@@ -221,8 +212,6 @@ var scanForDevices = function(self) {
 			switchingDevice = true;
 
                         logger.info('Attempting to play to Raumfeld device', device.name);
-
-			LocalSoundStreamer.stopStream();
 
 		    	stopCurrentDeviceMatch(function() {
 		
@@ -248,7 +237,7 @@ var scanForDevices = function(self) {
 
 				device.controls.on('stopped', function() {
 					if (device == currentDevice && !switchingDevice) {
-					    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
+					    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device, a: 1, opMenu: deviceMenuUPnP}));
 					}
 				});
 
@@ -256,14 +245,14 @@ var scanForDevices = function(self) {
 					onStop();
 				});
 
-				device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
+				device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device, a: 1, opMenu: deviceMenuUPnP}));
 			}, device);
 
                     };
 
 		    device.doConnect = doConnectUPnP;
 		
-                    deviceListMenu.append(MenuFactory.raumfeldDeviceItem(device, doConnectUPnP));
+                    deviceMenuUPnP.append(MenuFactory.raumfeldDeviceItem(device, doConnectUPnP));
 
 		    logger.info('Added Raumfeld menu item (reconnect name: %s)', reconnectName);
 
@@ -322,8 +311,14 @@ mb.on('ready', function ready() {
 
     //Menu startup message
     menu = new Menu();
+
+    deviceMenuChromecast = new Menu();
+    deviceMenuUPnP = new Menu();
     deviceListMenu = new Menu();
- 
+
+    deviceListMenu.insertSubMenu(0, 0, "Chromecast", deviceMenuChromecast);
+    deviceListMenu.insertSubMenu(1, 0, "UPnP", deviceMenuUPnP);
+
     menu.append(MenuFactory.castToDeviceMenu(deviceListMenu));
 
     /*
@@ -407,15 +402,10 @@ mb.on('ready', function ready() {
     //Clicking this option stops casting audio to Chromecast
     menu.append(new MenuItem({
         label: 'Stop casting',
-        enabled: true, // default disabled as not initially playing
+        enabled: true,
         click: function () {
-
-            // Attempt to stop all controls
             stopCurrentDevice();
 	    currentDevice = null;
-
-            // Clean up playing speaker icon
-            deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
         }
     }));
 

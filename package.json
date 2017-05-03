@@ -8,6 +8,8 @@
     "url": "https://github.com/md5555/devicecast"
   },
   "dependencies": {
+    "portfinder" : "~1.0.13",
+    "webworker-threads": "0.7.11",
     "express": "4.15.2",
     "exec": "0.2.1",
     "osxsleep": "md5555/osxsleep",
