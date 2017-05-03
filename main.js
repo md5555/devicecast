@@ -151,9 +151,9 @@ var scanForDevices = function(self) {
         switch (device.type) {
             case DeviceMatcher.TYPES.CHROMECAST:
 
-		device.controls = new ChromeCast(device);
-
 		var doConnectCast = function onClicked() {
+
+		    device.controls = new ChromeCast(device);
 
 		    switchingDevice = true;
 
@@ -202,9 +202,9 @@ var scanForDevices = function(self) {
 
                 if (DeviceMatcher.isRaumfeld(device)) {
 
-                    device.controls = new RaumfeldZone(device);
-
 		    var doConnectUPnP = function onClicked() {
+
+                        device.controls = new RaumfeldZone(device);
 
 			switchingDevice = true;
 
