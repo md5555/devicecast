@@ -8,6 +8,7 @@
     "url": "https://github.com/md5555/devicecast"
   },
   "dependencies": {
+    "express": "4.15.2",
     "exec": "0.2.1",
     "osxsleep": "md5555/osxsleep",
     "nodobjc": "2.1.0",

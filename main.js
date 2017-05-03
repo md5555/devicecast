@@ -6,7 +6,7 @@ var path = require('path');
 var _ = require('lodash');
 
 //Electron dependencies
-const {app, dialog, Menu, MenuItem} = require('electron')
+const {app, dialog, Menu, MenuItem, nativeImage} = require('electron')
 const storage = require('electron-json-storage');
 
 var menubar = require('menubar');
@@ -49,13 +49,11 @@ var fullReset = function() {
 	}
 };
 
-var stopCurrentDevice = function (callback) {
+var stopDevice = function (callback, device) {
 
-	if (currentDevice) {
+	if (device) {
 
 	    logger.info("Stopping CURRENT device %s", currentDevice.name);
-
-	    var device = currentDevice;
 
 	    device.controls.stop(function(){
 
@@ -63,7 +61,9 @@ var stopCurrentDevice = function (callback) {
 		    NotificationService.notifyCastingStopped(device.controls);
 
 		    // Clean up playing speaker icon
-		    deviceListMenu.items.forEach(MenuFactory.removeSpeaker);
+		    for (var n = 0; n < deviceListMenu.items.length; n++) {
+			    deviceListMenu.setIcon(n, null);
+		    }
 
 		    // Switch tray icon
 		    mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
@@ -74,6 +74,19 @@ var stopCurrentDevice = function (callback) {
 	    if (callback) callback();
 	}
     };
+
+var stopCurrentDevice = function(callback) {
+    stopDevice(callback, currentDevice);	
+};
+
+var stopCurrentDeviceMatch = function(callback, matchDevice) {
+    
+    if (matchDevice != currentDevice) {
+	stopCurrentDevice(callback);
+    } else {
+	callback();
+    }
+};
 
 var onStartStream = function(cb) {
 
@@ -95,23 +108,22 @@ var onStop = function() {
     onStartStream();
 };
 
-var setSpeakIcon = function (item) {
-
-	logger.info("label: %s  name: %s", item.label, this.device.name);
-
-        if (item.label === this.device.name) {
-            MenuFactory.setSpeaker(item);
-        } else {
-            MenuFactory.removeSpeaker(item);
-        }
-};
-
 var onStreamingUpdateUI = function () {
 
 	switchingDevice = false;
 
         // set speak icon when playing
-        deviceListMenu.items.forEach(setSpeakIcon.bind({device: this.device}));
+	for (var n = 0; n < deviceListMenu.items.length; n++) {
+
+		logger.info("item label: [%s]   device: [%s]", deviceListMenu.items[n].label, this.device.name);
+
+		if (deviceListMenu.items[n].label === this.device.name) {
+			logger.info("Setting icon!");
+			var castIcon = nativeImage.createFromPath(path.join(__dirname, 'castingTemplate.png'));
+			deviceListMenu.setIcon(n, castIcon);
+		}
+        }
+
     	mb.tray.setContextMenu(menu);
 
         // Changes tray icon to "Casting"
@@ -126,10 +138,10 @@ var scanForDevices = function(self) {
 
         switch (device.type) {
             case DeviceMatcher.TYPES.CHROMECAST:
-		device.name = device.name + " (c)";
+		device.name = "Chromecast: "+device.name;
 		break;
 	    case DeviceMatcher.TYPES.UPNP:
-		device.name = device.name + " (u)";
+		device.name = "UPnP: " + device.name; 
 		break;
 		default:
 			break;
@@ -161,7 +173,7 @@ var scanForDevices = function(self) {
 
 		    LocalSoundStreamer.stopStream();
 
-		    stopCurrentDevice(function() {
+		    stopCurrentDeviceMatch(function() {
 	
 			    // Sets OSX selected input and output audio devices to Soundflower
 			    LocalSourceSwitcher.switchSource({
@@ -184,7 +196,7 @@ var scanForDevices = function(self) {
 			    currentDevice = device;
 
 			    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
-		    });
+		    }, device);
 
 		};
 
@@ -212,7 +224,7 @@ var scanForDevices = function(self) {
 
 			LocalSoundStreamer.stopStream();
 
-		    	stopCurrentDevice(function() {
+		    	stopCurrentDeviceMatch(function() {
 		
 				// Sets OSX selected input and output audio devices to Soundflower
 				LocalSourceSwitcher.switchSource({
@@ -234,15 +246,18 @@ var scanForDevices = function(self) {
 						logger.info("error while storing setting: %s", error.toString());
 					});
 
+				device.controls.on('stopped', function() {
+					if (device == currentDevice && !switchingDevice) {
+					    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
+					}
+				});
+
 				device.controls.registerErrorHandler(function(err){
-					/*dialog.showErrorBox("devicecast - An Error Occurred",
-							err.toString());*/
 					onStop();
 				});
 
 				device.controls.play(streamingAddress, onStreamingUpdateUI.bind({device: device}));
-
-			});
+			}, device);
 
                     };
 
