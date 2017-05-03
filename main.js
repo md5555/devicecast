@@ -281,6 +281,8 @@ mb.on('ready', function ready() {
 		case osxsleep.WILL_SLEEP:
 
 			switchingDevice = true;
+
+			LocalSoundStreamer.stopStream();
 			stopCurrentDevice();
 
 			break;
