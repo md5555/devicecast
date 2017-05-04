@@ -3,14 +3,12 @@
 //Shell and filesystem dependencies
 require('shelljs/global');
 var path = require('path');
-var _ = require('lodash');
 
 //Electron dependencies
-const {app, dialog, Menu, MenuItem, nativeImage} = require('electron')
+const {dialog, Menu, MenuItem, nativeImage} = require('electron')
 const storage = require('electron-json-storage');
-
-var menubar = require('menubar');
-var mb = menubar({dir: __dirname, icon: 'not-castingTemplate.png'});
+const menubar = require('menubar');
+const mb = menubar({dir: __dirname, icon: 'not-castingTemplate.png'});
 
 /* Internals */
 var MenuFactory = require('./lib/native/MenuFactory');
@@ -19,7 +17,8 @@ var DeviceLookupService = require('./lib/device/utils/DeviceLookupService');
 var DeviceMatcher = require('./lib/device/utils/DeviceMatcher');
 var LocalSourceSwitcher = require('./lib/device/utils/LocalSourceSwitcher');
 var UpnpMediaClientUtils = require('./lib/device/utils/UpnpMediaClientUtils');
-var LocalSoundStreamer = require('./lib/sound/LocalSoundStreamerWebcast');
+var SoundStreamer = require('./lib/sound/LocalSoundStreamerWebcast');
+var NativeSleep = require('sleep');
 
 /* Various Device controllers */
 const RaumfeldZone = require('./lib/device/controls/RaumfeldZone');
@@ -27,13 +26,16 @@ const ChromeCast = require('./lib/device/controls/ChromeCast');
 const logger = require('./lib/common/logger');
 const osxsleep = require('osxsleep');
 
+var streamer = new SoundStreamer(function () {
+    onStop();
+});
+
 var currentDevice = null;
 var menu = null;
 var devicesAdded = [];
 var streamingAddress;
 var reconnect = false;
 var reconnectName = null;
-var switchingDevice = false;
 var deviceMenuChromecast = null;
 var deviceMenuUPnP = null;
 var deviceListMenu = null;
@@ -59,11 +61,12 @@ var clearIcons = function () {
             opMenu.setIcon(n, null);
         }
     }
-}
+};
 
-function setTrayIconNotCasting() {
+var setTrayIconNotCasting = function() {
     mb.tray.setImage(path.join(__dirname, 'not-castingTemplate.png'));
-}
+};
+
 var stopDevice = function (callback, device) {
 
     if (device) {
@@ -83,13 +86,20 @@ var stopDevice = function (callback, device) {
 };
 
 var stopCurrentDevice = function (callback) {
-    stopDevice(callback, currentDevice);
+    stopDevice(function() {
+	    if (callback) callback();
+	}, currentDevice);
 };
 
 var stopCurrentDeviceMatch = function (callback, matchDevice) {
 
-    if (matchDevice !== currentDevice) {
-        stopCurrentDevice(callback);
+    if (currentDevice) {
+        if (currentDevice.name === matchDevice.name && currentDevice.type ===
+            matchDevice.type) {
+            callback();
+            return;
+        }
+        stopDevice(callback, currentDevice);
     } else {
         callback();
     }
@@ -97,27 +107,21 @@ var stopCurrentDeviceMatch = function (callback, matchDevice) {
 
 var onStartStream = function (cb) {
 
-    LocalSoundStreamer.startStream(function (streamUrl) {
+    streamer.startStream(function (streamUrl) {
         streamingAddress = streamUrl;
         if (cb) cb();
     }, function (err) {
-    }, function () {
-        onStop();
     });
 };
 
 var onStop = function () {
 
-    if (switchingDevice) {
-        return;
+    if (currentDevice) {
+        NotificationService.notifyCastingStopped(currentDevice);
     }
-
-    NotificationService.notifyCastingStopped(device.controls);
 };
 
 var onStreamingUpdateUI = function () {
-
-    switchingDevice = false;
 
     deviceListMenu.setIcon(0, null);
     deviceListMenu.setIcon(1, null);
@@ -163,19 +167,11 @@ var scanForDevices = function () {
 
                 var doConnectCast = function onClicked() {
 
-                    if (switchingDevice) {
-                        return;
-                    }
-
-                    switchingDevice = true;
-
-                    device.controls = new ChromeCast(device);
-
-                    LocalSoundStreamer.stopStream();
-
                     logger.info('Attempting to play to Google Cast device: ', device.name);
 
                     stopCurrentDeviceMatch(function () {
+
+                        device.controls = new ChromeCast(device);
 
                         // Sets OSX selected input and output audio devices to Soundflower
                         LocalSourceSwitcher.switchSource({
@@ -219,19 +215,11 @@ var scanForDevices = function () {
 
                     var doConnectUPnP = function onClicked() {
 
-                        if (switchingDevice) {
-                            return;
-                        }
-
-                        switchingDevice = true;
-
-                        device.controls = new RaumfeldZone(device);
-
-                        LocalSoundStreamer.stopStream();
-
                         logger.info('Attempting to play on Raumfeld Zone: ', device.name);
 
                         stopCurrentDeviceMatch(function () {
+
+                            device.controls = new RaumfeldZone(device);
 
                             // Sets OSX selected input and output audio devices to Soundflower
                             LocalSourceSwitcher.switchSource({
@@ -255,13 +243,11 @@ var scanForDevices = function () {
                                 onStop();
                             });
 
-                            onStartStream(function () {
-                                device.controls.play(streamingAddress, onStreamingUpdateUI.bind({
-                                    device: device,
-                                    a: 1,
-                                    opMenu: deviceMenuUPnP
-                                }));
-                            });
+                            device.controls.play(streamingAddress, onStreamingUpdateUI.bind({
+                                device: device,
+                                a: 1,
+                                opMenu: deviceMenuUPnP
+                            }));
 
                         }, device);
 
@@ -289,21 +275,23 @@ var scanForDevices = function () {
 mb.on('ready', function ready() {
 
     osxsleep.OSXSleep.start(function (state) {
+
         logger.info("sleep state: %d", state);
 
         switch (state) {
             case osxsleep.HAS_POWERED_ON:
                 if (currentDevice) {
-                    switchingDevice = false;
-                    onStartStream(function () {
-                        currentDevice.doConnect();
-                    })
+                    streamer.resume();
+                    setTimeout(currentDevice.doConnect, 500);
                 }
                 break;
             case osxsleep.WILL_SLEEP:
-                stopCurrentDevice(function () {
-                    LocalSoundStreamer.stopStream();
-                });
+                if (currentDevice) {
+                    streamer.suspend();
+                    stopCurrentDevice(function (){
+                        LocalSourceSwitcher.resetOriginSource();
+                    });
+                }
                 break;
         }
     });
@@ -427,12 +415,12 @@ mb.on('ready', function ready() {
     }));
 
     var onQuitHandler = function () {
-        switchingDevice = false;
         osxsleep.OSXSleep.stop();
-        stopCurrentDevice();
-        LocalSoundStreamer.stopStream();
-        LocalSourceSwitcher.resetOriginSource();
-        mb.app.quit();
+        stopCurrentDevice(function () {
+            streamer.stopStream();
+            LocalSourceSwitcher.resetOriginSource();
+            mb.app.quit();
+        });
     };
 
     // About
