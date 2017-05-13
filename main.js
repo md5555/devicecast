@@ -149,6 +149,8 @@ var onStreamingUpdateUI = function () {
 
     mb.tray.setImage(path.join(__dirname, 'castingTemplate.png'));
     mb.tray.setContextMenu(menu);
+
+    currentDevice = this.device;
 };
 
 var getDeviceFQN = function(device) {
@@ -179,29 +181,76 @@ var deviceHandler = function onDevice(device) {
 	    /*
 	    switch (device.type) {
 		case DeviceMatcher.TYPES.CHROMECAST:
-		    device.controls = new ChromeCast(device);
 		    break;
 		case DeviceMatcher.TYPES.UPNP:
-		    device.controls = new RaumfeldZone(device);
 
 		    for (var n = 0; n < deviceMenuUPnP.items.length; n++) {
 
 			var id = deviceMenuUPnP.items[n].id;
 
+			if (devicesAdded[n].xml === device.xml) {
+			    return;
+			}
+
 			if (id === getDeviceFQN(device)) {
+
+			var doConnectUPnP = function onClicked() {
+
+					logger.info('Attempting to play on Raumfeld Zone: ', device.name);
+
+					stopCurrentDeviceMatch(function () {
+
+					    device.controls = new RaumfeldZone(device);
+
+					    // Sets OSX selected input and output audio devices to Soundflower
+					    LocalSourceSwitcher.switchSource({
+						output: 'Soundflower (2ch)',
+						input: 'Soundflower (2ch)'
+					    });
+
+					    currentDevice = device;
+
+					    storage.set('reconnect', {
+						setting: reconnect,
+						name: getDeviceFQN(device) 
+					    }, function (error) {
+						if (error === null) {
+						    return;
+						}
+						logger.info("error while storing setting: %s", error.toString());
+					    });
+
+					    device.controls.registerErrorHandler(function () {
+						onStop();
+					    });
+
+					    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({
+						device: device,
+						a: 1,
+						opMenu: deviceMenuUPnP
+					    }));
+
+					}, device);
+
+			    };
+	
+			    device.doConnect = doConnectUPnP;
+			    devicesAdded[n] = device;
+
+			    if (currentDevice != null && getDeviceFQN(device) === getDeviceFQN(currentDevice)) {
+				currentDevice = device;
+			    }
+
 			    deviceMenuUPnP.items[n] = MenuFactory.raumfeldDeviceItem(getDeviceFQN(device), device, doConnectUPnP);
+
+			    mb.tray.setContextMenu(menu);
+
 			    break;
 			}
 		    }
 
 		    break;
 	    } 
-
-	    devicesAdded[n] = device;
-
-	    if (currentDevice != null && getDeviceFQN(device) === getDeviceFQN(currentDevice)) {
-		currentDevice = device;
-	    }
 	    */
 
 	    return;
@@ -211,17 +260,14 @@ var deviceHandler = function onDevice(device) {
 
             case DeviceMatcher.TYPES.CHROMECAST:
 
-		if (found) {
-		    return;
-		}
-
                 var doConnectCast = function onClicked() {
 
                     logger.info('Attempting to play to Google Cast device: ', device.name);
 
+		    device.controls = new ChromeCast(device);
+
                     stopCurrentDeviceMatch(function () {
 
-			device.controls = new ChromeCast(device);
 
                         // Sets OSX selected input and output audio devices to Soundflower
                         LocalSourceSwitcher.switchSource({
@@ -231,7 +277,7 @@ var deviceHandler = function onDevice(device) {
 
                         storage.set('reconnect', {
                             setting: reconnect,
-                            name: device.name
+                            name: getDeviceFQN(device) 
                         }, function (error) {
                             if (error === null) {
                                 return;
@@ -239,15 +285,11 @@ var deviceHandler = function onDevice(device) {
                             logger.info("error while storing setting: %s", error.toString());
                         });
 
-                        currentDevice = device;
-
-                        onStartStream(function () {
-                            device.controls.play(streamingAddress, onStreamingUpdateUI.bind({
-                                device: device,
-                                a: 0,
-                                opMenu: deviceMenuChromecast
-                            }));
-                        });
+			device.controls.play(streamingAddress, onStreamingUpdateUI.bind({
+				device: device,
+				a: 0,
+				opMenu: deviceMenuChromecast
+			}));
 
                     }, device);
 
@@ -263,13 +305,13 @@ var deviceHandler = function onDevice(device) {
 
                 if (DeviceMatcher.isRaumfeld(device)) {
 
+		    device.controls = new RaumfeldZone(device);
+
                     var doConnectUPnP = function onClicked() {
 
                         logger.info('Attempting to play on Raumfeld Zone: ', device.name);
 
                         stopCurrentDeviceMatch(function () {
-
-			    device.controls = new RaumfeldZone(device);
 
                             // Sets OSX selected input and output audio devices to Soundflower
                             LocalSourceSwitcher.switchSource({
@@ -277,11 +319,9 @@ var deviceHandler = function onDevice(device) {
                                 input: 'Soundflower (2ch)'
                             });
 
-                            currentDevice = device;
-
                             storage.set('reconnect', {
                                 setting: reconnect,
-                                name: device.name
+                                name: getDeviceFQN(device) 
                             }, function (error) {
                                 if (error === null) {
                                     return;
@@ -290,14 +330,14 @@ var deviceHandler = function onDevice(device) {
                             });
 
                             device.controls.registerErrorHandler(function () {
-                                onStop();
+                                //onStop();
                             });
 
-                            device.controls.play(streamingAddress, onStreamingUpdateUI.bind({
-                                device: device,
-                                a: 1,
-                                opMenu: deviceMenuUPnP
-                            }));
+			    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({
+					device: device,
+					a: 1,
+					opMenu: deviceMenuUPnP
+			    }));
 
                         }, device);
 
@@ -322,15 +362,11 @@ var deviceHandler = function onDevice(device) {
 			}
 		    }
 
-                    if (!found && (reconnectName !== null && (reconnectName.localeCompare(device.name) === 0))) {
+                    if (!found && (reconnectName !== null && (reconnectName.localeCompare(getDeviceFQN(device)) === 0))) {
                         doConnectUPnP();
-                    }
-
-		    /*
-		    if (!found) {
-			var controls = new RaumfeldZone(device);
-			controls.reconfigureZone();
-		    }*/
+                    } else if (!found) {
+			device.controls.reconfigureZone();
+		    }
                 }
                 break;
             default:
@@ -348,16 +384,10 @@ var scanForDevices = function () {
 
 var resetDevices = function() {
 
-    currentDevice = null;
-
-    streamer.stopStream();
-    onStartStream();
-
     devicesAdded = [];
-
     createMenu();
 
-    DeviceLookupService.lookUpDevices();
+    scanForDevices();
 }
 
 var createMenu = function() {
@@ -495,13 +525,21 @@ mb.on('ready', function ready() {
 	logger.warn("Device down: "+address);
     });
 
+    var self = this;
+
     reach.Reachability.start(function (state) {
 
 	logger.info("reachability state: "+state);    
 
 	if (state != 0) {
-	    resetDevices();
+	    onStartStream(function() {
+		resetDevices();
+	    });
+	} else {
+	    self.devicesAdded = []; 
+	    createMenu();
 	}
+
     });
 
     osxsleep.OSXSleep.start(function (state) {
@@ -510,17 +548,11 @@ mb.on('ready', function ready() {
 
         switch (state) {
             case osxsleep.HAS_POWERED_ON:
-		streamer.stopStream();
-		onStartStream();
 		resetDevices();
                 break;
             case osxsleep.WILL_SLEEP:
-                if (currentDevice) {
-                    stopCurrentDevice(function (){
-			streamer.stopStream();
-                        LocalSourceSwitcher.resetOriginSource();
-                    });
-                }
+		stopCurrentDevice(function(){
+		});
                 break;
         }
     });
