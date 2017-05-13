@@ -139,16 +139,20 @@ var onStreamingUpdateUI = function () {
     mb.tray.setContextMenu(menu);
 };
 
-var scanForDevices = function () {
+var getDeviceFQN = function(device) {
 
-    DeviceLookupService.lookUpDevices(function onDevice(device) {
+    return device.name + ":" + device.type;
+};
+
+var deviceHandler = function onDevice(device) {
 
         var found = false;
+	var n = 0;
 
-        for (var n = 0; n < devicesAdded.length; n++) {
+        for ( ; n < devicesAdded.length; n++) {
 
-            var n0 = device.name + ":" + device.type;
-            var n1 = devicesAdded[n].name + ":" + devicesAdded[n].type;
+            var n0 = getDeviceFQN(device); 
+            var n1 = getDeviceFQN(devicesAdded[n]);
 
             if (n0 === n1) {
                 found = true;
@@ -159,6 +163,10 @@ var scanForDevices = function () {
         if (!found) {
             devicesAdded.push(device);
         } else {
+	    devicesAdded[n].xml = device;
+	    if (currentDevice != null && getDeviceFQN(device) === getDeviceFQN(currentDevice)) {
+		currentDevice = device;
+	    }
             return;
         }
 
@@ -267,12 +275,17 @@ var scanForDevices = function () {
         }
 
         mb.tray.setContextMenu(menu);
-    });
+};
 
+var scanForDevices = function () {
+
+    DeviceLookupService.lookUpDevices();
 };
 
 //Menubar construction
 mb.on('ready', function ready() {
+
+    DeviceLookupService.initialize(deviceHandler);
 
     osxsleep.OSXSleep.start(function (state) {
 
