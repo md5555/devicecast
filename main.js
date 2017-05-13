@@ -354,68 +354,13 @@ var resetDevices = function() {
     onStartStream();
 
     devicesAdded = [];
-    deviceMenuChromecast.items = []; 
-    deviceMenuUPnP.items = [];
 
-    mb.tray.setContextMenu(menu);
+    createMenu();
 
     DeviceLookupService.lookUpDevices();
 }
 
-//Menubar construction
-mb.on('ready', function ready() {
-
-    DeviceLookupService.initialize(deviceHandler, function(address) {
-	logger.warn("Device down: "+address);
-    });
-
-    reach.Reachability.start(function (state) {
-
-	logger.info("reachability state: "+state);    
-
-	if (state != 0) {
-	    resetDevices();
-	}
-    });
-
-    osxsleep.OSXSleep.start(function (state) {
-
-        logger.info("sleep state: %d", state);
-
-        switch (state) {
-            case osxsleep.HAS_POWERED_ON:
-		streamer.stopStream();
-		onStartStream();
-		resetDevices();
-                break;
-            case osxsleep.WILL_SLEEP:
-                if (currentDevice) {
-                    stopCurrentDevice(function (){
-			streamer.stopStream();
-                        LocalSourceSwitcher.resetOriginSource();
-                    });
-                }
-                break;
-        }
-    });
-
-    storage.get('reconnect',
-        function (error, object) {
-
-            if (object == null || object.setting == null || object.name == null) {
-                return;
-            }
-
-            reconnect = object.setting;
-            reconnectName = object.name;
-
-            logger.info("reconnect: " + reconnect + " name: " + reconnectName);
-        });
-
-    process.on('uncaughtException', function (err) {
-        fullReset();
-        dialog.showErrorBox("devicecast - An Error Occurred", err.toString());
-    });
+var createMenu = function() {
 
     //Menu startup message
     menu = new Menu();
@@ -541,6 +486,64 @@ mb.on('ready', function ready() {
 
     // Set the menu items
     mb.tray.setContextMenu(menu);
+}
+
+//Menubar construction
+mb.on('ready', function ready() {
+
+    DeviceLookupService.initialize(deviceHandler, function(address) {
+	logger.warn("Device down: "+address);
+    });
+
+    reach.Reachability.start(function (state) {
+
+	logger.info("reachability state: "+state);    
+
+	if (state != 0) {
+	    resetDevices();
+	}
+    });
+
+    osxsleep.OSXSleep.start(function (state) {
+
+        logger.info("sleep state: %d", state);
+
+        switch (state) {
+            case osxsleep.HAS_POWERED_ON:
+		streamer.stopStream();
+		onStartStream();
+		resetDevices();
+                break;
+            case osxsleep.WILL_SLEEP:
+                if (currentDevice) {
+                    stopCurrentDevice(function (){
+			streamer.stopStream();
+                        LocalSourceSwitcher.resetOriginSource();
+                    });
+                }
+                break;
+        }
+    });
+
+    storage.get('reconnect',
+        function (error, object) {
+
+            if (object == null || object.setting == null || object.name == null) {
+                return;
+            }
+
+            reconnect = object.setting;
+            reconnectName = object.name;
+
+            logger.info("reconnect: " + reconnect + " name: " + reconnectName);
+        });
+
+    process.on('uncaughtException', function (err) {
+        fullReset();
+        dialog.showErrorBox("devicecast - An Error Occurred", err.toString());
+    });
+
+    createMenu();
 
     onStartStream(function () {
         scanForDevices();
