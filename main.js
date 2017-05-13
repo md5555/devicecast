@@ -128,6 +128,8 @@ var onStop = function () {
 
     if (currentDevice) {
         NotificationService.notifyCastingStopped(currentDevice);
+	clearIcons();
+	setTrayIconNotCasting();
     }
 };
 
@@ -343,6 +345,23 @@ var scanForDevices = function () {
     DeviceLookupService.lookUpDevices();
 };
 
+
+var resetDevices = function() {
+
+    currentDevice = null;
+
+    streamer.stopStream();
+    onStartStream();
+
+    devicesAdded = [];
+    deviceMenuChromecast.items = []; 
+    deviceMenuUPnP.items = [];
+
+    mb.tray.setContextMenu(menu);
+
+    DeviceLookupService.lookUpDevices();
+}
+
 //Menubar construction
 mb.on('ready', function ready() {
 
@@ -355,7 +374,7 @@ mb.on('ready', function ready() {
 	logger.info("reachability state: "+state);    
 
 	if (state != 0) {
-	    DeviceLookupService.lookUpDevices();
+	    resetDevices();
 	}
     });
 
@@ -365,15 +384,14 @@ mb.on('ready', function ready() {
 
         switch (state) {
             case osxsleep.HAS_POWERED_ON:
-                if (currentDevice) {
-                    streamer.resume();
-                    setTimeout(currentDevice.doConnect, 500);
-                }
+		streamer.stopStream();
+		onStartStream();
+		resetDevices();
                 break;
             case osxsleep.WILL_SLEEP:
                 if (currentDevice) {
-                    streamer.suspend();
                     stopCurrentDevice(function (){
+			streamer.stopStream();
                         LocalSourceSwitcher.resetOriginSource();
                     });
                 }
