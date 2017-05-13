@@ -15,6 +15,7 @@
     "express": "4.15.2",
     "exec": "0.2.1",
     "osxsleep": "md5555/osxsleep",
+    "osxreachability": "md5555/osxreachability",
     "nodobjc": "2.1.0",
     "eslint": "3.19.0",
     "chromecast-api": "0.2.5",

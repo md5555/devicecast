@@ -25,6 +25,7 @@ const RaumfeldZone = require('./lib/device/controls/RaumfeldZone');
 const ChromeCast = require('./lib/device/controls/ChromeCast');
 const logger = require('./lib/common/logger');
 const osxsleep = require('osxsleep');
+const reach = require('osxreachability');
 
 var streamer = new SoundStreamer(function () {
     onStop();
@@ -287,6 +288,15 @@ mb.on('ready', function ready() {
 
     DeviceLookupService.initialize(deviceHandler);
 
+    reach.Reachability.start(function (state) {
+
+	logger.info("reachability state: "+state);    
+
+	if (state != 0) {
+	    DeviceLookupService.lookUpDevices();
+	}
+    });
+
     osxsleep.OSXSleep.start(function (state) {
 
         logger.info("sleep state: %d", state);
@@ -428,6 +438,7 @@ mb.on('ready', function ready() {
     }));
 
     var onQuitHandler = function () {
+        reach.Reachability.stop();
         osxsleep.OSXSleep.stop();
         stopCurrentDevice(function () {
             streamer.stopStream();
