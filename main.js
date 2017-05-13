@@ -74,6 +74,15 @@ var stopDevice = function (callback, device) {
 
         logger.info("Stopping CURRENT device %s", currentDevice.name);
 
+	if (device.controls == null) {
+            clearIcons();
+            setTrayIconNotCasting();
+
+            if (callback) callback();
+
+	    return;
+	}
+
         device.controls.stop(function () {
 
             clearIcons();
@@ -164,15 +173,45 @@ var deviceHandler = function onDevice(device) {
         if (!found) {
             devicesAdded.push(device);
         } else {
-	    devicesAdded[n].xml = device;
+
+	    /*
+	    switch (device.type) {
+		case DeviceMatcher.TYPES.CHROMECAST:
+		    device.controls = new ChromeCast(device);
+		    break;
+		case DeviceMatcher.TYPES.UPNP:
+		    device.controls = new RaumfeldZone(device);
+
+		    for (var n = 0; n < deviceMenuUPnP.items.length; n++) {
+
+			var id = deviceMenuUPnP.items[n].id;
+
+			if (id === getDeviceFQN(device)) {
+			    deviceMenuUPnP.items[n] = MenuFactory.raumfeldDeviceItem(getDeviceFQN(device), device, doConnectUPnP);
+			    break;
+			}
+		    }
+
+		    break;
+	    } 
+
+	    devicesAdded[n] = device;
+
 	    if (currentDevice != null && getDeviceFQN(device) === getDeviceFQN(currentDevice)) {
 		currentDevice = device;
 	    }
-            return;
+	    */
+
+	    return;
         }
 
         switch (device.type) {
+
             case DeviceMatcher.TYPES.CHROMECAST:
+
+		if (found) {
+		    return;
+		}
 
                 var doConnectCast = function onClicked() {
 
@@ -180,7 +219,7 @@ var deviceHandler = function onDevice(device) {
 
                     stopCurrentDeviceMatch(function () {
 
-                        device.controls = new ChromeCast(device);
+			device.controls = new ChromeCast(device);
 
                         // Sets OSX selected input and output audio devices to Soundflower
                         LocalSourceSwitcher.switchSource({
@@ -214,7 +253,7 @@ var deviceHandler = function onDevice(device) {
 
                 device.doConnect = doConnectCast;
 
-                deviceMenuChromecast.append(MenuFactory.chromeCastItem(device, doConnectCast));
+                deviceMenuChromecast.append(MenuFactory.chromeCastItem(getDeviceFQN(device), device, doConnectCast));
 
                 break;
 
@@ -228,7 +267,7 @@ var deviceHandler = function onDevice(device) {
 
                         stopCurrentDeviceMatch(function () {
 
-                            device.controls = new RaumfeldZone(device);
+			    device.controls = new RaumfeldZone(device);
 
                             // Sets OSX selected input and output audio devices to Soundflower
                             LocalSourceSwitcher.switchSource({
@@ -264,11 +303,32 @@ var deviceHandler = function onDevice(device) {
 
                     device.doConnect = doConnectUPnP;
 
-                    deviceMenuUPnP.append(MenuFactory.raumfeldDeviceItem(device, doConnectUPnP));
+		    if (!found) {
 
-                    if (reconnectName !== null && (reconnectName.localeCompare(device.name) === 0)) {
+			deviceMenuUPnP.append(MenuFactory.raumfeldDeviceItem(getDeviceFQN(device), device, doConnectUPnP));
+
+		    } else {
+
+			for (var n = 0; n < deviceMenuUPnP.items.length; n++) {
+
+			    var id = deviceMenuUPnP.items[n].id;
+
+			    if (id === getDeviceFQN(device)) {
+				deviceMenuUPnP.items[n] = MenuFactory.raumfeldDeviceItem(getDeviceFQN(device), device, doConnectUPnP);
+				break;
+			    }
+			}
+		    }
+
+                    if (!found && (reconnectName !== null && (reconnectName.localeCompare(device.name) === 0))) {
                         doConnectUPnP();
                     }
+
+		    /*
+		    if (!found) {
+			var controls = new RaumfeldZone(device);
+			controls.reconfigureZone();
+		    }*/
                 }
                 break;
             default:
@@ -286,7 +346,9 @@ var scanForDevices = function () {
 //Menubar construction
 mb.on('ready', function ready() {
 
-    DeviceLookupService.initialize(deviceHandler);
+    DeviceLookupService.initialize(deviceHandler, function(address) {
+	logger.warn("Device down: "+address);
+    });
 
     reach.Reachability.start(function (state) {
 
@@ -322,7 +384,7 @@ mb.on('ready', function ready() {
     storage.get('reconnect',
         function (error, object) {
 
-            if (object === null) {
+            if (object == null || object.setting == null || object.name == null) {
                 return;
             }
 
