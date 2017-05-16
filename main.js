@@ -27,9 +27,7 @@ const logger = require('./lib/common/logger');
 const osxsleep = require('osxsleep');
 const reach = require('osxreachability');
 
-var streamer = new SoundStreamer(function () {
-    onStop();
-});
+var streamer = new SoundStreamer();
 
 var currentDevice = null;
 var menu = null;
@@ -82,6 +80,7 @@ var stopDevice = function (callback, device) {
         logger.info("Stopping CURRENT device %s", currentDevice.name);
 
 	if (device.controls == null) {
+
             clearIcons();
             setTrayIconNotCasting();
 
@@ -110,6 +109,7 @@ var stopCurrentDevice = function (callback) {
     }
 
     stopDevice(function() {
+	    currentDevice = null;
 	    if (callback) callback();
 	}, currentDevice);
 };
@@ -134,7 +134,7 @@ var onStartStream = function (cb) {
         streamingAddress = streamUrl;
         if (cb) cb();
     }, function (err) {
-    });
+    }, onStop);
 };
 
 var onStop = function () {
@@ -286,7 +286,6 @@ var deviceHandler = function(device) {
 
                     stopCurrentDevice(function () {
 
-
                         // Sets OSX selected input and output audio devices to Soundflower
                         LocalSourceSwitcher.switchSource({
                             output: 'Soundflower (2ch)',
@@ -303,11 +302,15 @@ var deviceHandler = function(device) {
                             logger.info("error while storing setting: %s", error.toString());
                         });
 
+			onStartStream(function() {
+
 			device.controls.play(streamingAddress, onStreamingUpdateUI.bind({
 				device: device,
 				a: 0,
 				opMenu: deviceMenuChromecast
 			}));
+
+			});
 
                     }, device);
 
@@ -348,14 +351,18 @@ var deviceHandler = function(device) {
                             });
 
                             device.controls.registerErrorHandler(function () {
-                                //onStop();
+                                onStop();
                             });
+
+			    onStartStream(function() {
 
 			    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({
 					device: device,
 					a: 1,
 					opMenu: deviceMenuUPnP
 			    }));
+
+			    });
 
                         }, device);
 
@@ -382,9 +389,9 @@ var deviceHandler = function(device) {
 
                     if (!found && (reconnectName !== null && (reconnectName.localeCompare(getDeviceFQN(device)) === 0))) {
                         doConnectUPnP();
-                    } else if (!found) {
+                    } /*else if (!found) {
 			device.controls.reconfigureZone();
-		    }
+		    } */
                 }
                 break;
             default:
@@ -404,8 +411,6 @@ var resetDevices = function() {
 
     devicesAdded = [];
     createMenu();
-
-    scanForDevices();
 }
 
 var createMenu = function() {
@@ -555,13 +560,11 @@ mb.on('ready', function ready() {
 
 	logger.info("reachability state: "+state);    
 
-	if (state != 0) {
-	    onStartStream(function() {
-		resetDevices();
-	    });
-	} else {
+	if (state == 0) {
 	    self.devicesAdded = []; 
 	    createMenu();
+	} else {
+	    scanForDevices();
 	}
 
     });
@@ -575,7 +578,7 @@ mb.on('ready', function ready() {
 
 		var src = osxsleep.OSXSleep.getPowerSource();
 		
-		if (currentDevice != null && src === osxsleep.POWER_SOURCE_AC) {
+		if (currentDevice != null && src == osxsleep.POWER_SOURCE_AC) {
 		    logger.warn("IOPower: BLOCKING sleep power change");
 		    return false;
 		}
@@ -583,10 +586,14 @@ mb.on('ready', function ready() {
 		logger.warn("IOPower: PERMITTING sleep power change");
 		return true;
 
-            case osxsleep.HAS_POWERED_ON:
+            case osxsleep.WILL_POWER_ON:
 		resetDevices();
                 break;
+	    case osxsleep.HAS_POWERED_ON:
+		scanForDevices();
+		break;
             case osxsleep.WILL_SLEEP:
+		DeviceLookupService.stopSearch();
 		stopCurrentDevice(function(){
 		});
                 break;
@@ -617,7 +624,5 @@ mb.on('ready', function ready() {
 
     logger.info("IOPower: current power source is: " + src);
 
-    onStartStream(function () {
-        scanForDevices();
-    });
+    scanForDevices();
 });
