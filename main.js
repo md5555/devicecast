@@ -52,7 +52,7 @@ var fullReset = function () {
 
 var clearIcons = function () {
 
-    var menus = [deviceListMenu, deviceMenuChromecast, deviceMenuUPnP];
+    var menus = [deviceMenuChromecast, deviceMenuUPnP];
 
     for (var a = 0; a < menus.length; a++) {
 
@@ -61,7 +61,13 @@ var clearIcons = function () {
         for (var n = 0; n < opMenu.items.length; n++) {
             opMenu.setIcon(n, null);
         }
+
     }
+
+    deviceListMenu.setIcon(0, null);
+    deviceListMenu.setIcon(1, null);
+
+    mb.tray.setContextMenu(menu);
 };
 
 var setTrayIconNotCasting = function() {
@@ -158,7 +164,7 @@ var getDeviceFQN = function(device) {
     return device.name + ":" + device.type;
 };
 
-var deviceHandler = function onDevice(device) {
+var deviceHandler = function(device) {
 
         var found = false;
 	var n = 0;
@@ -266,7 +272,7 @@ var deviceHandler = function onDevice(device) {
 
 		    device.controls = new ChromeCast(device);
 
-                    stopCurrentDeviceMatch(function () {
+                    stopCurrentDevice(function () {
 
 
                         // Sets OSX selected input and output audio devices to Soundflower
@@ -311,7 +317,7 @@ var deviceHandler = function onDevice(device) {
 
                         logger.info('Attempting to play on Raumfeld Zone: ', device.name);
 
-                        stopCurrentDeviceMatch(function () {
+                        stopCurrentDevice(function () {
 
                             // Sets OSX selected input and output audio devices to Soundflower
                             LocalSourceSwitcher.switchSource({
@@ -547,6 +553,18 @@ mb.on('ready', function ready() {
         logger.info("sleep state: %d", state);
 
         switch (state) {
+	    case osxsleep.CAN_SLEEP:
+
+		var src = osxsleep.OSXSleep.getPowerSource();
+		
+		if (currentDevice != null && src === osxsleep.POWER_SOURCE_AC) {
+		    logger.warn("IOPower: BLOCKING sleep power change");
+		    return false;
+		}
+
+		logger.warn("IOPower: PERMITTING sleep power change");
+		return true;
+
             case osxsleep.HAS_POWERED_ON:
 		resetDevices();
                 break;
@@ -576,6 +594,10 @@ mb.on('ready', function ready() {
     });
 
     createMenu();
+
+    var src = osxsleep.OSXSleep.getPowerSource();
+
+    logger.info("IOPower: current power source is: " + src);
 
     onStartStream(function () {
         scanForDevices();
