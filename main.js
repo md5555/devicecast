@@ -40,6 +40,7 @@ var reconnectName = null;
 var deviceMenuChromecast = null;
 var deviceMenuUPnP = null;
 var deviceListMenu = null;
+var stopCasting = null;
 
 var fullReset = function () {
 
@@ -102,6 +103,12 @@ var stopDevice = function (callback, device) {
 };
 
 var stopCurrentDevice = function (callback) {
+
+    if (currentDevice == null) {
+	if (callback) callback();
+	return;
+    }
+
     stopDevice(function() {
 	    if (callback) callback();
 	}, currentDevice);
@@ -136,10 +143,17 @@ var onStop = function () {
         NotificationService.notifyCastingStopped(currentDevice);
 	clearIcons();
 	setTrayIconNotCasting();
+	stopCasting.enabled = false;
+	currentDevice = null;
+	mb.tray.setContextMenu(menu);
     }
 };
 
 var onStreamingUpdateUI = function () {
+
+    currentDevice = this.device;
+
+    stopCasting.enabled = true;
 
     deviceListMenu.setIcon(0, null);
     deviceListMenu.setIcon(1, null);
@@ -155,8 +169,6 @@ var onStreamingUpdateUI = function () {
 
     mb.tray.setImage(path.join(__dirname, 'castingTemplate.png'));
     mb.tray.setContextMenu(menu);
-
-    currentDevice = this.device;
 };
 
 var getDeviceFQN = function(device) {
@@ -453,6 +465,7 @@ var createMenu = function() {
     }));
 
     // Stream Options
+    /*
     var streamMenu = new Menu();
     streamMenu.append(new MenuItem({
         label: 'OSX Output (default)',
@@ -487,16 +500,22 @@ var createMenu = function() {
     menu.append(MenuFactory.separator());
     menu.append(MenuFactory.steamMenu(streamMenu));
     menu.append(MenuFactory.separator());
+    */
+
+    menu.append(MenuFactory.separator());
 
     //Clicking this option stops casting audio to Chromecast
-    menu.append(new MenuItem({
+    stopCasting = new MenuItem({
         label: 'Stop casting',
         enabled: true,
         click: function () {
-            stopCurrentDevice();
-            currentDevice = null;
+	    onStop();
         }
-    }));
+    });
+
+    stopCasting.enabled = false;
+
+    menu.append(stopCasting);
 
     var onQuitHandler = function () {
         reach.Reachability.stop();
@@ -508,14 +527,13 @@ var createMenu = function() {
         });
     };
 
+    menu.append(MenuFactory.separator());
+
     // About
     menu.append(MenuFactory.about());
 
     // Quit
     menu.append(MenuFactory.quit(onQuitHandler));
-
-    // Clicking this option starts casting audio to Cast
-    menu.append(MenuFactory.separator());
 
     // CMD + C death
     mb.app.on('quit', onQuitHandler);
