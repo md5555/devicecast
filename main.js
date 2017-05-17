@@ -32,7 +32,6 @@ var streamer = new SoundStreamer();
 var currentDevice = null;
 var menu = null;
 var devicesAdded = [];
-var streamingAddress;
 var reconnect = false;
 var reconnectName = null;
 var deviceMenuChromecast = null;
@@ -77,7 +76,7 @@ var stopDevice = function (callback, device) {
 
     if (device) {
 
-        logger.info("Stopping CURRENT device %s", currentDevice.name);
+        logger.info("Stopping device %s", device.name);
 
 	if (device.controls == null) {
 
@@ -116,7 +115,7 @@ var stopCurrentDevice = function (callback) {
 
 var stopCurrentDeviceMatch = function (callback, matchDevice) {
 
-    if (currentDevice) {
+    if (currentDevice && matchDevice) {
         if (currentDevice.name === matchDevice.name && currentDevice.type ===
             matchDevice.type) {
             callback();
@@ -124,15 +123,14 @@ var stopCurrentDeviceMatch = function (callback, matchDevice) {
         }
         stopDevice(callback, currentDevice);
     } else {
-        callback();
+	callback();
     }
 };
 
 var onStartStream = function (cb) {
 
     streamer.startStream(function (streamUrl) {
-        streamingAddress = streamUrl;
-        if (cb) cb();
+        if (cb) cb(streamUrl);
     }, function (err) {
     }, onStop);
 };
@@ -140,12 +138,21 @@ var onStartStream = function (cb) {
 var onStop = function () {
 
     if (currentDevice) {
-        NotificationService.notifyCastingStopped(currentDevice);
-	clearIcons();
-	setTrayIconNotCasting();
-	stopCasting.enabled = false;
+
 	currentDevice = null;
-	mb.tray.setContextMenu(menu);
+
+	streamer.stopStream(function() {
+    
+	    if (currentDevice != null) {
+		return;
+	    }
+
+	    NotificationService.notifyCastingStopped(currentDevice);
+	    clearIcons();
+	    setTrayIconNotCasting();
+	    stopCasting.enabled = false;
+	    mb.tray.setContextMenu(menu);
+	});
     }
 };
 
@@ -242,7 +249,7 @@ var deviceHandler = function(device) {
 						onStop();
 					    });
 
-					    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({
+					    device.controls.play(xxx, onStreamingUpdateUI.bind({
 						device: device,
 						a: 1,
 						opMenu: deviceMenuUPnP
@@ -284,7 +291,7 @@ var deviceHandler = function(device) {
 
 		    device.controls = new ChromeCast(device);
 
-                    stopCurrentDevice(function () {
+                    stopCurrentDeviceMatch(function () {
 
                         // Sets OSX selected input and output audio devices to Soundflower
                         LocalSourceSwitcher.switchSource({
@@ -302,9 +309,9 @@ var deviceHandler = function(device) {
                             logger.info("error while storing setting: %s", error.toString());
                         });
 
-			onStartStream(function() {
+			onStartStream(function(address) {
 
-			device.controls.play(streamingAddress, onStreamingUpdateUI.bind({
+			device.controls.play(address, onStreamingUpdateUI.bind({
 				device: device,
 				a: 0,
 				opMenu: deviceMenuChromecast
@@ -332,7 +339,7 @@ var deviceHandler = function(device) {
 
                         logger.info('Attempting to play on Raumfeld Zone: ', device.name);
 
-                        stopCurrentDevice(function () {
+                        stopCurrentDeviceMatch(function () {
 
                             // Sets OSX selected input and output audio devices to Soundflower
                             LocalSourceSwitcher.switchSource({
@@ -351,12 +358,12 @@ var deviceHandler = function(device) {
                             });
 
                             device.controls.registerErrorHandler(function () {
-                                onStop();
+                                //onStop();
                             });
 
-			    onStartStream(function() {
+			    onStartStream(function(address) {
 
-			    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({
+			    device.controls.play(address, onStreamingUpdateUI.bind({
 					device: device,
 					a: 1,
 					opMenu: deviceMenuUPnP
@@ -389,9 +396,9 @@ var deviceHandler = function(device) {
 
                     if (!found && (reconnectName !== null && (reconnectName.localeCompare(getDeviceFQN(device)) === 0))) {
                         doConnectUPnP();
-                    } /*else if (!found) {
+                    } else if (!found) {
 			device.controls.reconfigureZone();
-		    } */
+		    } 
                 }
                 break;
             default:
