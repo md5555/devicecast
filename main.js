@@ -390,9 +390,9 @@ var deviceHandler = function(device) {
 
                     if (!found && (reconnectName !== null && (reconnectName.localeCompare(getDeviceFQN(device)) === 0))) {
                         doConnectUPnP();
-                    } else if (!found) {
+                    } /*else if (!found) {
 			device.controls.reconfigureZone();
-		    }
+		    } */
                 }
                 break;
             default:
@@ -618,6 +618,7 @@ mb.on('ready', function ready() {
 		MediaControl.iTunes.ignore();
 		DeviceLookupService.stopSearch();
 		stopCurrentDevice(function(){
+		    streamer.stopStream();
 		});
                 break;
         }
