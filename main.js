@@ -11,6 +11,7 @@ const menubar = require('menubar');
 const mb = menubar({dir: __dirname, icon: 'not-castingTemplate.png'});
 
 /* Internals */
+var MediaControl = require('node-osx-mediacontrol');
 var MenuFactory = require('./lib/native/MenuFactory');
 var NotificationService = require('./lib/native/NotificationService');
 var DeviceLookupService = require('./lib/device/utils/DeviceLookupService');
@@ -149,7 +150,7 @@ var onStop = function () {
     }
 };
 
-var onStreamingUpdateUI = function () {
+var onStreamStarted = function () {
 
     currentDevice = this.device;
 
@@ -242,7 +243,7 @@ var deviceHandler = function(device) {
 						onStop();
 					    });
 
-					    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({
+					    device.controls.play(streamingAddress, onStreamStarted.bind({
 						device: device,
 						a: 1,
 						opMenu: deviceMenuUPnP
@@ -304,7 +305,7 @@ var deviceHandler = function(device) {
 
 			onStartStream(function() {
 
-			device.controls.play(streamingAddress, onStreamingUpdateUI.bind({
+			device.controls.play(streamingAddress, onStreamStarted.bind({
 				device: device,
 				a: 0,
 				opMenu: deviceMenuChromecast
@@ -356,7 +357,7 @@ var deviceHandler = function(device) {
 
 			    onStartStream(function() {
 
-			    device.controls.play(streamingAddress, onStreamingUpdateUI.bind({
+			    device.controls.play(streamingAddress, onStreamStarted.bind({
 					device: device,
 					a: 1,
 					opMenu: deviceMenuUPnP
@@ -389,9 +390,9 @@ var deviceHandler = function(device) {
 
                     if (!found && (reconnectName !== null && (reconnectName.localeCompare(getDeviceFQN(device)) === 0))) {
                         doConnectUPnP();
-                    } /*else if (!found) {
+                    } else if (!found) {
 			device.controls.reconfigureZone();
-		    } */
+		    }
                 }
                 break;
             default:
@@ -525,6 +526,7 @@ var createMenu = function() {
     var onQuitHandler = function () {
         reach.Reachability.stop();
         osxsleep.OSXSleep.stop();
+	MediaControl.iTunes.ignore();
         stopCurrentDevice(function () {
             streamer.stopStream();
             LocalSourceSwitcher.resetOriginSource();
@@ -545,6 +547,26 @@ var createMenu = function() {
 
     // Set the menu items
     mb.tray.setContextMenu(menu);
+}
+
+var observeItunes = function() {
+
+    var self = this;
+
+    MediaControl.iTunes.observe(function (state) {
+
+	logger.info("iTunesState: "+state);
+
+	if (state === MediaControl.ITUNES_STOPPED) {
+	    DeviceLookupService.stopSearch();
+	    stopCurrentDevice(function(){
+	    });
+	} else if (state === MediaControl.ITUNES_PLAYING && currentDevice === null) {
+	    resetDevices(); 
+	    scanForDevices();
+	}
+
+    });
 }
 
 //Menubar construction
@@ -578,7 +600,7 @@ mb.on('ready', function ready() {
 
 		var src = osxsleep.OSXSleep.getPowerSource();
 		
-		if (currentDevice != null && src == osxsleep.POWER_SOURCE_AC) {
+		if (currentDevice != null && src === osxsleep.POWER_SOURCE_AC) {
 		    logger.warn("IOPower: BLOCKING sleep power change");
 		    return false;
 		}
@@ -590,9 +612,10 @@ mb.on('ready', function ready() {
 		resetDevices();
                 break;
 	    case osxsleep.HAS_POWERED_ON:
-		scanForDevices();
+		observeItunes();
 		break;
             case osxsleep.WILL_SLEEP:
+		MediaControl.iTunes.ignore();
 		DeviceLookupService.stopSearch();
 		stopCurrentDevice(function(){
 		});
@@ -621,8 +644,7 @@ mb.on('ready', function ready() {
     createMenu();
 
     var src = osxsleep.OSXSleep.getPowerSource();
-
     logger.info("IOPower: current power source is: " + src);
 
-    scanForDevices();
+    observeItunes();
 });

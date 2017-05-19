@@ -8,6 +8,8 @@
     "url": "https://github.com/md5555/devicecast"
   },
   "dependencies": {
+    "node-osx-mediacontrol": "0.0.1",
+    "associative-array": "1.0.22",
     "bindings": "~1.1.1",
     "castv2-client": "1.2.0",
     "chromecast-api": "0.2.5",
@@ -46,7 +48,7 @@
   },
   "main": "main.js",
   "scripts": {
-    "start": "electron . --icon assets/icon.icns --debug"
+    "start": "electron . --icon assets/icon.icns --debug --inspect=6006"
   },
   "license": "MIT",
   "engines": {
