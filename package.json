@@ -8,7 +8,6 @@
     "url": "https://github.com/md5555/devicecast"
   },
   "dependencies": {
-    "node-osx-mediacontrol": "0.0.1",
     "associative-array": "1.0.22",
     "bindings": "~1.1.1",
     "castv2-client": "1.2.0",
@@ -24,6 +23,8 @@
     "menubar": "5.2.3",
     "nan": "~2.3.2",
     "node-notifier": "4.4.0",
+    "node-osx-mediacontrol": "0.0.1",
+    "node-osx-session": "0.0.1",
     "nodecast-js": "1.0.3",
     "nodobjc": "2.1.0",
     "osx-audio": "^1.0.0",
@@ -34,6 +35,7 @@
     "request": "2.67.0",
     "shelljs": "0.5.3",
     "sleep": "5.1.1",
+    "stream-buffers": "^3.0.1",
     "upnp-mediarenderer-client": "1.2.4",
     "upnp-ssdp": "0.0.2",
     "valid-url": "1.0.9",

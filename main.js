@@ -11,6 +11,7 @@ const menubar = require('menubar');
 const mb = menubar({dir: __dirname, icon: 'not-castingTemplate.png'});
 
 /* Internals */
+var SessionControl = require('node-osx-session');
 var MediaControl = require('node-osx-mediacontrol');
 var MenuFactory = require('./lib/native/MenuFactory');
 var NotificationService = require('./lib/native/NotificationService');
@@ -44,10 +45,6 @@ var stopCasting = null;
 var fullReset = function () {
 
     stopCurrentDevice();
-
-    if (currentDevice !== null) {
-        currentDevice.doConnect();
-    }
 };
 
 var clearIcons = function () {
@@ -135,7 +132,10 @@ var onStartStream = function (cb) {
         streamingAddress = streamUrl;
         if (cb) cb();
     }, function (err) {
-    }, onStop);
+    }, function () {
+	onStop();
+	MediaControl.iTunes.controlPause();
+    });
 };
 
 var onStop = function () {
@@ -146,7 +146,9 @@ var onStop = function () {
 	setTrayIconNotCasting();
 	stopCasting.enabled = false;
 	currentDevice = null;
+	resetDevices();
 	mb.tray.setContextMenu(menu);
+	LocalSourceSwitcher.resetOriginSource();
     }
 };
 
@@ -170,6 +172,11 @@ var onStreamStarted = function () {
 
     mb.tray.setImage(path.join(__dirname, 'castingTemplate.png'));
     mb.tray.setContextMenu(menu);
+
+    if (iTunesWasPlayingOnSleep) {
+	iTunesWasPlayingOnSleep = false;
+	MediaControl.iTunes.controlPlay();	
+    }
 };
 
 var getDeviceFQN = function(device) {
@@ -181,10 +188,10 @@ var deviceHandler = function(device) {
 
         var found = false;
 	var n = 0;
+        var n0 = getDeviceFQN(device); 
 
         for ( ; n < devicesAdded.length; n++) {
 
-            var n0 = getDeviceFQN(device); 
             var n1 = getDeviceFQN(devicesAdded[n]);
 
             if (n0 === n1) {
@@ -196,82 +203,6 @@ var deviceHandler = function(device) {
         if (!found) {
             devicesAdded.push(device);
         } else {
-
-	    /*
-	    switch (device.type) {
-		case DeviceMatcher.TYPES.CHROMECAST:
-		    break;
-		case DeviceMatcher.TYPES.UPNP:
-
-		    for (var n = 0; n < deviceMenuUPnP.items.length; n++) {
-
-			var id = deviceMenuUPnP.items[n].id;
-
-			if (devicesAdded[n].xml === device.xml) {
-			    return;
-			}
-
-			if (id === getDeviceFQN(device)) {
-
-			var doConnectUPnP = function onClicked() {
-
-					logger.info('Attempting to play on Raumfeld Zone: ', device.name);
-
-					stopCurrentDeviceMatch(function () {
-
-					    device.controls = new RaumfeldZone(device);
-
-					    // Sets OSX selected input and output audio devices to Soundflower
-					    LocalSourceSwitcher.switchSource({
-						output: 'Soundflower (2ch)',
-						input: 'Soundflower (2ch)'
-					    });
-
-					    currentDevice = device;
-
-					    storage.set('reconnect', {
-						setting: reconnect,
-						name: getDeviceFQN(device) 
-					    }, function (error) {
-						if (error === null) {
-						    return;
-						}
-						logger.info("error while storing setting: %s", error.toString());
-					    });
-
-					    device.controls.registerErrorHandler(function () {
-						onStop();
-					    });
-
-					    device.controls.play(streamingAddress, onStreamStarted.bind({
-						device: device,
-						a: 1,
-						opMenu: deviceMenuUPnP
-					    }));
-
-					}, device);
-
-			    };
-	
-			    device.doConnect = doConnectUPnP;
-			    devicesAdded[n] = device;
-
-			    if (currentDevice != null && getDeviceFQN(device) === getDeviceFQN(currentDevice)) {
-				currentDevice = device;
-			    }
-
-			    deviceMenuUPnP.items[n] = MenuFactory.raumfeldDeviceItem(getDeviceFQN(device), device, doConnectUPnP);
-
-			    mb.tray.setContextMenu(menu);
-
-			    break;
-			}
-		    }
-
-		    break;
-	    } 
-	    */
-
 	    return;
         }
 
@@ -279,11 +210,11 @@ var deviceHandler = function(device) {
 
             case DeviceMatcher.TYPES.CHROMECAST:
 
+	        device.controls = new ChromeCast(device);
+
                 var doConnectCast = function onClicked() {
 
                     logger.info('Attempting to play to Google Cast device: ', device.name);
-
-		    device.controls = new ChromeCast(device);
 
                     stopCurrentDevice(function () {
 
@@ -350,6 +281,10 @@ var deviceHandler = function(device) {
                                 }
                                 logger.info("error while storing setting: %s", error.toString());
                             });
+	
+			    device.controls.on('stopped', function() {
+				onStop();
+			    });
 
                             device.controls.registerErrorHandler(function () {
                                 onStop();
@@ -390,9 +325,9 @@ var deviceHandler = function(device) {
 
                     if (!found && (reconnectName !== null && (reconnectName.localeCompare(getDeviceFQN(device)) === 0))) {
                         doConnectUPnP();
-                    } /*else if (!found) {
+                    } else if (!found) {
 			device.controls.reconfigureZone();
-		    } */
+		    } 
                 }
                 break;
             default:
@@ -410,7 +345,20 @@ var scanForDevices = function () {
 
 var resetDevices = function() {
 
+    for (var n = 0; n < devicesAdded.length; n++) {
+
+	var device = devicesAdded[n];
+
+	if (device.controls != null) {
+	    device.controls.destroy();
+	}
+
+	device.doConnect = null;
+    }
+
     devicesAdded = [];
+
+    currentDevice = null;
     createMenu();
 }
 
@@ -515,25 +463,15 @@ var createMenu = function() {
         label: 'Stop casting',
         enabled: true,
         click: function () {
-	    onStop();
+	    stopCurrentDevice(function(){
+		onStop();		
+	    });
         }
     });
 
     stopCasting.enabled = false;
 
     menu.append(stopCasting);
-
-    var onQuitHandler = function () {
-        reach.Reachability.stop();
-        osxsleep.OSXSleep.stop();
-	MediaControl.iTunes.ignore();
-        stopCurrentDevice(function () {
-            streamer.stopStream();
-            LocalSourceSwitcher.resetOriginSource();
-            mb.app.quit();
-        });
-    };
-
     menu.append(MenuFactory.separator());
 
     // About
@@ -542,12 +480,14 @@ var createMenu = function() {
     // Quit
     menu.append(MenuFactory.quit(onQuitHandler));
 
-    // CMD + C death
-    mb.app.on('quit', onQuitHandler);
-
     // Set the menu items
     mb.tray.setContextMenu(menu);
 }
+
+var onQuitHandler = undefined;
+
+var iTunesWasPlaying = false;
+var iTunesWasPlayingOnSleep = false;
 
 var observeItunes = function() {
 
@@ -559,11 +499,24 @@ var observeItunes = function() {
 
 	if (state === MediaControl.ITUNES_STOPPED) {
 	    DeviceLookupService.stopSearch();
+	    resetDevices();
 	    stopCurrentDevice(function(){
 	    });
-	} else if (state === MediaControl.ITUNES_PLAYING && currentDevice === null) {
-	    resetDevices(); 
-	    scanForDevices();
+
+	    iTunesWasPlaying = false;
+
+	} else if (state === MediaControl.ITUNES_PLAYING) {
+
+	    if (currentDevice === null) {
+		resetDevices(); 
+		scanForDevices();
+	    }
+
+	    iTunesWasPlaying = true;
+
+	} else if (state === MediaControl.ITUNES_PAUSED) {
+
+	    iTunesWasPlarng = false;
 	}
 
     });
@@ -572,23 +525,75 @@ var observeItunes = function() {
 //Menubar construction
 mb.on('ready', function ready() {
 
+    onQuitHandler = function () {
+        reach.Reachability.stop();
+        osxsleep.OSXSleep.stop();
+	MediaControl.iTunes.ignore();
+        stopCurrentDevice(function () {
+            streamer.stopStream();
+            LocalSourceSwitcher.resetOriginSource();
+            mb.app.quit();
+        });
+    };
+
+    // CMD + C death
+    mb.app.on('quit', onQuitHandler);
+
     DeviceLookupService.initialize(deviceHandler, function(address) {
 	logger.warn("Device down: "+address);
+
+	for (var n = 0; n < devicesAdded.length; n++) {
+
+	    if (devicesAdded[n].xml == address) {
+		DeviceLookupService.stopSearch();
+		resetDevices();
+		scanForDevices();	
+		break;
+	    }
+	}
     });
 
     var self = this;
+
+    SessionControl.Session.observe(function (state) {
+
+	logger.info("session state: "+state);
+
+	if (state == 0) {
+	    streamer.stopStream();
+            LocalSourceSwitcher.resetOriginSource();
+
+	    MediaControl.iTunes.ignore();
+
+	    if (iTunesWasPlaying) {
+		MediaControl.iTunes.controlPause();
+	    }
+
+	    resetDevices();
+
+	} else {
+
+	    observeItunes();
+
+	    if (iTunesWasPlaying) {
+		MediaControl.iTunes.controlPlay();
+	    } else {
+		scanForDevices();	
+	    }
+	}
+
+    });
 
     reach.Reachability.start(function (state) {
 
 	logger.info("reachability state: "+state);    
 
-	if (state == 0) {
-	    self.devicesAdded = []; 
-	    createMenu();
-	} else {
+	if (state == 1) {
 	    scanForDevices();
+	} else {
+	    streamer.stopStream(); 
+            LocalSourceSwitcher.resetOriginSource();
 	}
-
     });
 
     osxsleep.OSXSleep.start(function (state) {
@@ -613,9 +618,12 @@ mb.on('ready', function ready() {
                 break;
 	    case osxsleep.HAS_POWERED_ON:
 		observeItunes();
+		scanForDevices();
 		break;
             case osxsleep.WILL_SLEEP:
 		MediaControl.iTunes.ignore();
+		iTunesWasPlayingOnSleep = iTunesWasPlaying;
+		iTunesWasPlaying = false;
 		DeviceLookupService.stopSearch();
 		stopCurrentDevice(function(){
 		    streamer.stopStream();
