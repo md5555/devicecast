@@ -134,14 +134,23 @@ var onStartStream = function (cb) {
     }, function (err) {
     }, function () {
 	onStop();
-	MediaControl.iTunes.controlPause();
     });
 };
+
+var onStopByDevice = function() {
+
+    streamer.stopStream();
+    onStop();
+}
 
 var onStop = function () {
 
     if (currentDevice) {
-	streamer.stopStream();
+
+	if (streamer.getIsStreaming()) {
+	    streamer.stopStreamIgnoreCb();
+	}
+
         NotificationService.notifyCastingStopped(currentDevice);
 	clearIcons();
 	setTrayIconNotCasting();
@@ -173,10 +182,23 @@ var onStreamStarted = function () {
     mb.tray.setImage(path.join(__dirname, 'castingTemplate.png'));
     mb.tray.setContextMenu(menu);
 
-    if (iTunesWasPlayingOnSleep) {
-	iTunesWasPlayingOnSleep = false;
-	MediaControl.iTunes.controlPlay();	
-    }
+    logger.info("deviceWasSleeping: "+(deviceWasSleeping != null && deviceWasSleeping.toString())+" iTunesWasPlaying: "+(iTunesWasPlayingOnSleep != null && iTunesWasPlayingOnSleep.toString()));
+
+    if (deviceWasSleeping != null && deviceWasSleeping) {
+	deviceWasSleeping = false;
+	if (iTunesWasPlayingOnSleep != null && iTunesWasPlayingOnSleep) {
+	    iTunesWasPlayingOnSleep = null;
+	    if (currentItunesState != MediaControl.ITUNES_PLAYING) {
+		logger.info("Restarting iTunes Playback");
+	        MediaControl.iTunes.controlPlay();	
+	    } else {
+		logger.info("iTunes already Playing");
+	    }
+	    return;
+	}
+    } 
+
+
 };
 
 var getDeviceFQN = function(device) {
@@ -283,11 +305,11 @@ var deviceHandler = function(device) {
                             });
 	
 			    device.controls.on('stopped', function() {
-				onStop();
+				onStopByDevice();
 			    });
 
                             device.controls.registerErrorHandler(function () {
-                                onStop();
+                                onStopByDevice();
                             });
 
 			    onStartStream(function() {
@@ -326,7 +348,9 @@ var deviceHandler = function(device) {
                     if (!found && (reconnectName !== null && (reconnectName.localeCompare(getDeviceFQN(device)) === 0))) {
                         doConnectUPnP();
                     } else if (!found) {
-			device.controls.reconfigureZone();
+			device.controls.reconfigureZone(function(result) {
+			    
+			});
 		    } 
 
 		    /*
@@ -471,7 +495,7 @@ var createMenu = function() {
         enabled: true,
         click: function () {
 	    stopCurrentDevice(function(){
-		onStop();		
+		onStopByDevice();		
 	    });
         }
     });
@@ -493,42 +517,53 @@ var createMenu = function() {
 
 var onQuitHandler = undefined;
 
-var iTunesWasPlaying = false;
-var iTunesWasPlayingOnSleep = false;
+var deviceWasSleeping = null;
+var iTunesWasPlaying = null;
+var iTunesWasPlayingOnSleep = null;
+var currentiTunesState = MediaControl.ITUNES_STOPPED;
 
-var observeItunes = function() {
+var observeItunes = function(cb) {
 
-/*
     var self = this;
+
+    var once = false;
 
     MediaControl.iTunes.observe(function (state) {
 
 	logger.info("iTunesState: "+state);
 
+	currentItunesState = state;
+
 	if (state === MediaControl.ITUNES_STOPPED) {
-	    DeviceLookupService.stopSearch();
-	    resetDevices();
-	    stopCurrentDevice(function(){
-	    });
+
+	    /*DeviceLookupService.stopSearch();
+	    resetDevices();*/
+
+	    /*stopCurrentDevice(function(){
+	    });*/
 
 	    iTunesWasPlaying = false;
+	    iTunesWasPlayingOnSleep = false;
 
 	} else if (state === MediaControl.ITUNES_PLAYING) {
 
+	    iTunesWasPlaying = true;
+	    iTunesWasPlayingOnSleep = true;
+
 	    if (currentDevice === null) {
-		resetDevices(); 
 		scanForDevices();
 	    }
 
-	    iTunesWasPlaying = true;
-
 	} else if (state === MediaControl.ITUNES_PAUSED) {
 
-	    iTunesWasPlarng = false;
+	    iTunesWasPlaying = false;
 	}
 
+	if (cb && !once) {
+	    once = true;
+	    cb();
+	}
     });
-*/
 }
 
 //Menubar construction
@@ -564,17 +599,18 @@ mb.on('ready', function ready() {
 
     var self = this;
 
+/*
     SessionControl.Session.observe(function (state) {
 
 	logger.info("session state: "+state);
 
 	if (state == 0) {
-	    streamer.stopStream();
-            LocalSourceSwitcher.resetOriginSource();
 
 	    MediaControl.iTunes.ignore();
 
-	    if (iTunesWasPlaying) {
+	    onStopByDevice();
+
+	    if (iTunesWasPlaying != null && iTunesWasPlaying) {
 		MediaControl.iTunes.controlPause();
 	    }
 
@@ -582,16 +618,18 @@ mb.on('ready', function ready() {
 
 	} else {
 
-	    observeItunes();
+	    observeItunes(function() {
+		if (iTunesWasPlaying != null && iTunesWasPlaying) {
+		    MediaControl.iTunes.controlPlay();
+		} else {
+		    scanForDevices();	
+		}
+		// scanForDevices();
+	    });
 
-	    if (iTunesWasPlaying) {
-		MediaControl.iTunes.controlPlay();
-	    } else {
-		scanForDevices();	
-	    }
 	}
-
     });
+*/
 
     reach.Reachability.start(function (state) {
 
@@ -600,8 +638,7 @@ mb.on('ready', function ready() {
 	if (state == 1) {
 	    scanForDevices();
 	} else {
-	    streamer.stopStream(); 
-            LocalSourceSwitcher.resetOriginSource();
+	    onStopByDevice();
 	}
     });
 
@@ -626,13 +663,13 @@ mb.on('ready', function ready() {
 		resetDevices();
                 break;
 	    case osxsleep.HAS_POWERED_ON:
-		observeItunes();
-		scanForDevices();
+		observeItunes(function() {
+		    scanForDevices();
+		});
 		break;
             case osxsleep.WILL_SLEEP:
+		deviceWasSleeping = true;
 		MediaControl.iTunes.ignore();
-		iTunesWasPlayingOnSleep = iTunesWasPlaying;
-		iTunesWasPlaying = false;
 		DeviceLookupService.stopSearch();
 		stopCurrentDevice(function(){
 		    streamer.stopStream();
@@ -669,6 +706,7 @@ mb.on('ready', function ready() {
     var src = osxsleep.OSXSleep.getPowerSource();
     logger.info("IOPower: current power source is: " + src);
 
-    observeItunes();
-    scanForDevices();
+    observeItunes(function(){
+	scanForDevices();
+    });
 });
