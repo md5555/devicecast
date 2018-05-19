@@ -35,8 +35,8 @@ var currentDevice = null;
 var menu = null;
 var devicesAdded = [];
 var streamingAddress;
-var reconnect = false;
-var reconnectName = null;
+var reconnect = true;
+var reconnectName = "2049:upnp";
 var deviceMenuChromecast = null;
 var deviceMenuUPnP = null;
 var deviceListMenu = null;
@@ -328,10 +328,17 @@ var deviceHandler = function(device) {
                     } else if (!found) {
 			device.controls.reconfigureZone();
 		    } 
+
+		    /*
+		    if (getDeviceFQN(device) == "2049:upnp") {
+			doConnectUPnP();
+		    }
+		    */
+
                 }
                 break;
             default:
-                logger.error('Unknown recognised device found', logger.level === 'verbose' ? device : device.name);
+                logger.error('Unknown recognized device found', logger.level === 'verbose' ? device : device.name);
         }
 
         mb.tray.setContextMenu(menu);
@@ -491,6 +498,7 @@ var iTunesWasPlayingOnSleep = false;
 
 var observeItunes = function() {
 
+/*
     var self = this;
 
     MediaControl.iTunes.observe(function (state) {
@@ -520,6 +528,7 @@ var observeItunes = function() {
 	}
 
     });
+*/
 }
 
 //Menubar construction
@@ -632,6 +641,7 @@ mb.on('ready', function ready() {
         }
     });
 
+/*
     storage.get('reconnect',
         function (error, object) {
 
@@ -643,7 +653,11 @@ mb.on('ready', function ready() {
             reconnectName = object.name;
 
             logger.info("reconnect: " + reconnect + " name: " + reconnectName);
+
+
+
         });
+*/
 
     process.on('uncaughtException', function (err) {
         fullReset();
@@ -656,4 +670,5 @@ mb.on('ready', function ready() {
     logger.info("IOPower: current power source is: " + src);
 
     observeItunes();
+    scanForDevices();
 });
