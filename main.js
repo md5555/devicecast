@@ -146,7 +146,6 @@ var onStop = function () {
 	setTrayIconNotCasting();
 	stopCasting.enabled = false;
 	currentDevice = null;
-	resetDevices();
 	mb.tray.setContextMenu(menu);
 	LocalSourceSwitcher.resetOriginSource();
     }
