@@ -147,11 +147,12 @@ var onStop = function () {
 
     if (currentDevice) {
 
+        NotificationService.notifyCastingStopped(currentDevice);
+
 	if (streamer.getIsStreaming()) {
 	    streamer.stopStreamIgnoreCb();
 	}
 
-        NotificationService.notifyCastingStopped(currentDevice);
 	clearIcons();
 	setTrayIconNotCasting();
 	stopCasting.enabled = false;
